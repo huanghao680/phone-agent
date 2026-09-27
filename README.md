@@ -44,6 +44,8 @@ Phone-Agent.apk
 
 ## root 深度集成（可选）
 
+> 本节全部为**可选**增强。APP 的两个图标（Zcode TUI / DeepSeek Harness Web UI）**完全不依赖 root**——它们使用的 Node 运行时内置于 APK、解压在应用私有目录；Magisk 模块只负责把 `zcode` / `dsh` 命令暴露给 APP 之外的终端。非 root 时 dsh 后台服务可能被系统"幻象进程清理"回收（回到 APP 会自动拉起，可关电池优化缓解；root 修复开关可根治）。
+
 在 **设置** 页：
 
 - **安装系统级命令**：把 Node 运行时复制为 Magisk 模块 `phone_agent`（/data/adb/modules/），在 `/system/bin` 暴露 `zcode` / `dsh` 包装脚本。**重启手机后生效**，之后任意终端：
