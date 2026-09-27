@@ -21,7 +21,21 @@ android {
         }
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Committed keystore (throwaway debug credentials) so every build has
+            // the same signature and `adb install -r` updates work across CI runs.
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
         }

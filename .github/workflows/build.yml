@@ -27,24 +27,6 @@ jobs:
         # AGP auto-installs missing platforms/build-tools/NDK once licenses are accepted.
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
 
-      - name: Cache stable debug keystore
-        # A per-run keystore would change the APK signature on every build and
-        # block `adb install -r` updates (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: phone-agent-debug-keystore-v1
-
-      - name: Generate debug keystore if missing
-        run: |
-          if [ ! -f ~/.android/debug.keystore ]; then
-            mkdir -p ~/.android
-            keytool -genkeypair -keystore ~/.android/debug.keystore \
-              -storepass android -keypass android -alias androiddebugkey \
-              -dname "CN=Android Debug,O=Android,C=US" \
-              -keyalg RSA -keysize 2048 -validity 10000
-          fi
-
       - name: Stage embedded runtime (Node.js from Termux repo)
         run: bash scripts/fetch-runtime.sh
 
