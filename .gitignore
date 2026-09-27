@@ -10,3 +10,4 @@ captures/
 
 # generated at build time by scripts/fetch-*.sh (CI runs them before gradle)
 app/src/main/assets/
+dist/
