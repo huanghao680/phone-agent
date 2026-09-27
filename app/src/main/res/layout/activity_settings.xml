@@ -67,6 +67,45 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:paddingTop="20dp"
+            android:text="Agent 组件更新（zcode / dsh）"
+            android:textColor="#E2E8F0"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/update_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:text="点击检查后显示版本对比"
+            android:textColor="#94A3B8"
+            android:textIsSelectable="true" />
+
+        <Button
+            android:id="@+id/check_updates_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="检查更新" />
+
+        <Button
+            android:id="@+id/update_zcode_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:enabled="false"
+            android:text="更新 zcode" />
+
+        <Button
+            android:id="@+id/update_dsh_btn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:enabled="false"
+            android:text="更新 dsh" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:paddingTop="16dp"
             android:text="工作区目录（可选；授权后 zcode/dsh 以它为工作根目录）"
             android:textColor="#94A3B8" />

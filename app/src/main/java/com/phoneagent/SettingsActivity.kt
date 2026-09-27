@@ -55,6 +55,64 @@ class SettingsActivity : AppCompatActivity() {
             refreshWorkspace()
         }
 
+        // --- Agent updates ---
+        val updateStatus = findViewById<TextView>(R.id.update_status)
+        val updateZcode = findViewById<Button>(R.id.update_zcode_btn)
+        val updateDsh = findViewById<Button>(R.id.update_dsh_btn)
+        var infos: List<AgentUpdate.Info> = emptyList()
+        findViewById<Button>(R.id.check_updates_btn).setOnClickListener {
+            updateStatus.text = "检查中…（走设置里的镜像/代理）"
+            thread {
+                val result = try {
+                    AgentUpdate.status(this)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                runOnUiThread {
+                    infos = result
+                    if (result.isEmpty()) {
+                        updateStatus.text = "检查失败：registry 不可达（检查镜像/代理设置）"
+                    } else {
+                        updateStatus.text = result.joinToString("\n") { i ->
+                            val state = when {
+                                i.latest == "未知" -> "registry 不可达"
+                                i.installed == null -> "未安装"
+                                i.updateAvailable -> "${i.installed} → ${i.latest}（可更新）"
+                                else -> "${i.installed}（已是最新）"
+                            }
+                            "· ${i.name}: $state"
+                        }
+                        updateZcode.isEnabled = result.firstOrNull()?.updateAvailable == true
+                        updateDsh.isEnabled = result.lastOrNull()?.updateAvailable == true
+                    }
+                }
+            }
+        }
+        fun runUpdate(pkg: String, onLine: (String) -> Unit) {
+            val ver = when (pkg) {
+                "zcode-app-cli" -> infos.firstOrNull { it.name == pkg }?.latest ?: return
+                else -> infos.firstOrNull { it.name == "@deepseek-ai/dsh" }?.latest ?: return
+            }
+            val tgz = AgentUpdate.fetchTarball(this, pkg, ver, onLine) ?: return
+            AgentUpdate.applyUpdate(this, pkg, tgz, onLine)
+        }
+        updateZcode.setOnClickListener {
+            updateStatus.text = "更新 zcode 中…"
+            thread {
+                val log = StringBuilder()
+                runUpdate("zcode-app-cli") { line -> log.appendLine(line) }
+                runOnUiThread { updateStatus.text = log.toString() }
+            }
+        }
+        updateDsh.setOnClickListener {
+            updateStatus.text = "更新 dsh 中…"
+            thread {
+                val log = StringBuilder()
+                runUpdate("@deepseek-ai/dsh") { line -> log.appendLine(line) }
+                runOnUiThread { updateStatus.text = log.toString() }
+            }
+        }
+
         findViewById<Button>(R.id.install_module_btn).setOnClickListener {
             confirm(
                 "安装系统级命令？",
