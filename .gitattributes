@@ -1,0 +1,13 @@
+* text=auto
+*.sh text eol=lf
+*.kt text
+*.kts text
+*.java text
+*.xml text
+*.md text
+*.gradle text
+*.env text
+*.tgz binary
+*.tar.xz binary
+*.deb binary
+*.png binary

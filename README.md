@@ -1,0 +1,77 @@
+# Phone-Agent
+
+把 [Zcode](https://github.com/zai-org/ZCode) 和 [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 两个开源 AI Agent 移植到安卓（arm64、建议 Android 8+、已 root 更佳）的**独立 APP**——不依赖 Termux 应用。
+
+一个 APK，两个桌面图标：
+
+| 图标 | 形态 | 实现 |
+|---|---|---|
+| **Zcode** | 全屏终端 TUI | 内嵌 Node.js 运行时 + Termux 终端模拟器（Apache-2.0 源码），真实 PTY 里跑 `zcode` 交互式 TUI |
+| **DeepSeek Harness** | 全屏 Web UI | 内嵌 Node 起 `dsh web`（127.0.0.1:3080），WebView 全屏呈现 |
+
+外加**可选的 root 深度集成**：一键安装 Magisk 模块，把 `zcode` / `dsh` 命令装进 `/system/bin`——之后机内**任意终端**（Termux、adb shell、MT 管理器终端…）输入 `zcode` 即可打开 TUI，且**运行时不需要 root**。
+
+## 架构
+
+```
+Phone-Agent.apk
+├─ assets/runtime.tar.xz     Node 26.4.0 运行时（取自 Termux 软件仓库的标准 Android ELF，
+│                            MIT 协议；仅为二进制来源，与 Termux 应用无关）
+├─ assets/packages/*.tgz     zcode-app-cli / @deepseek-ai/dsh 离线安装包
+│
+├─ [Zcode 图标]      TerminalView(PTY) ── setup.sh ──> node bin/zcode.js（首次自动 npm 安装）
+├─ [DSH 图标]        DshService(前台) ──> node dsh web ──> WebView(127.0.0.1:3080)
+├─ [设置]            API Key / npm 镜像 / root 集成开关
+└─ root 开关 ──> Magisk 模块 phone_agent
+      /system/bin/zcode、/system/bin/dsh（包装脚本，任意终端可执行）
+      /system/etc/phone_agent/usr/**（Node 运行时）
+```
+
+## 获取 APK（免本地构建）
+
+本机无需安卓 SDK，用 GitHub Actions 云端构建：
+
+1. 把本仓库推送到 GitHub；
+2. 进入 **Actions → build → Run workflow**（push 到 main 也会自动触发）；
+3. 构建完成后在 Artifacts 下载 **Phone-Agent-debug-apk**；
+4. 传到手机安装（需允许安装未知来源应用）。
+
+## 首次启动
+
+**Zcode（TUI）**：点开图标 → 自动解压内嵌 Node 运行时 → 终端里自动安装 zcode/dsh 组件（首次需联网，走设置里的 npm 镜像，默认 npmmirror；zcode/dsh 本体已离线内置）→ 进入 zcode TUI → 在 TUI 内执行 `/login` 完成 Z.AI OAuth 登录。
+
+**DeepSeek Harness**：点开图标 → 后台完成解压/安装后自动启动 `dsh web` → 全屏 WebView 打开 `http://127.0.0.1:3080`。DeepSeek API Key 在 **设置** 页填写（也可在 dsh 配置里自行管理）。
+
+## root 深度集成（可选）
+
+在 **设置** 页：
+
+- **安装系统级命令**：把 Node 运行时复制为 Magisk 模块 `phone_agent`（/data/adb/modules/），在 `/system/bin` 暴露 `zcode` / `dsh` 包装脚本。**重启手机后生效**，之后任意终端：
+
+  ```sh
+  zcode            # 打开 zcode TUI（无需 root 运行）
+  dsh web          # 启动 DeepSeek Harness
+  ```
+
+  提示：系统命令使用终端各自的 `HOME`（可用 `ZCODE_HOME` / `DSH_HOME` 覆盖），与 APP 内的会话配置相互独立。
+- **修复后台幻象进程限制**：Android 12L+ 会清理后台子进程导致终端会话被杀，此开关放宽该限制（系统 OTA 后可能需重跑）。
+- **卸载系统级命令**：删除模块，重启后失效。
+
+## 故障排查
+
+- **终端一闪而过 / exec 报错**：仅支持 arm64 设备（`uname -m` 应为 `aarch64`）。
+- **组件安装失败**：检查网络；在设置里换 npm 镜像（官方 `https://registry.npmjs.org` / npmmirror）后重进 APP。
+- **后台会话被杀**：root 用户执行"修复幻象进程限制"；同时给 APP 关闭电池优化。
+- **dsh 打不开**：设置页填 DeepSeek API Key；看 `Android/data/com.phoneagent/cache/dsh.log`。
+- **通知不显示**：Android 13+ 在系统设置里手动允许通知（不影响功能）。
+
+## 开发者
+
+- **本地构建**：Linux/WSL 下 `bash scripts/fetch-runtime.sh && bash scripts/fetch-packages.sh`，然后 `gradle :app:assembleDebug`（需 JDK 17 + Android SDK）。Windows 上 assets 由 CI 产出。
+- **版本升级**：改 `scripts/versions.env` 与 `app/src/main/java/com/phoneagent/Versions.kt`（两者必须同步），重跑脚本 + 构建。
+- **targetSdk 28 是刻意的**：Android 10+ 在 targetSdk ≥ 29 时禁止从应用私有目录 exec，内嵌 Node 必须放在 filesDir 执行（Termux 同款取舍）；本 APP 侧载分发，不受商店政策约束。
+- **后续路线（Zcode Web GUI）**：官方 monorepo 的 `packages/web`（React/Vite）+ `packages/zcode-server-cli`（Hono）可像 dsh 一样以 WebView 承载；CI 从锁定 ref 构建 `@zcode/web` dist + server bundle 即可。注意 server-cli 带守护进程/服务注册等桌面假设，需要适配，故暂列 v1.5。
+
+## 许可证
+
+本项目 Apache-2.0。第三方组件见 [NOTICE.md](NOTICE.md)（Termux 终端库 Apache-2.0；Node.js/npm MIT/ISC；zcode-app-cli MIT；@deepseek-ai/dsh MIT）。

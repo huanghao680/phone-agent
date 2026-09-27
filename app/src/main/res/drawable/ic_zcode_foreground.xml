@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zcode launcher icon: ">_" prompt in terminal green -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M34,38 L54,54 L34,70"
+        android:strokeColor="#4ADE80"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M60,72 L80,72"
+        android:strokeColor="#4ADE80"
+        android:strokeWidth="8"
+        android:strokeLineCap="round" />
+</vector>

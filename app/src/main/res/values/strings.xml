@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Phone Agent</string>
+    <string name="zcode_label">Zcode</string>
+    <string name="dsh_label">DeepSeek Harness</string>
+    <string name="settings_label">Phone Agent 设置</string>
+    <string name="initializing_runtime">正在初始化 Node 运行时…</string>
+    <string name="dsh_loading">正在启动 DeepSeek Harness 服务…</string>
+    <string name="dsh_error">服务未就绪，请重试</string>
+    <string name="retry">重试</string>
+</resources>
