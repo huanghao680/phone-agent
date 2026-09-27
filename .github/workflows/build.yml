@@ -22,10 +22,9 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Accept SDK licenses
+        # ubuntu-22.04 runners ship a preinstalled Android SDK at $ANDROID_HOME;
+        # AGP auto-installs missing platforms/build-tools/NDK once licenses are accepted.
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
 
       - name: Stage embedded runtime (Node.js from Termux repo)
