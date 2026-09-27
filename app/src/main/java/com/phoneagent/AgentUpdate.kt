@@ -75,7 +75,7 @@ object AgentUpdate {
             return null
         }
         val tarball = try {
-            meta.getJSONObject("versions").getJSONObject(version).getString("dist").let { it.getString("tarball") }
+            meta.getJSONObject("versions").getJSONObject(version).getJSONObject("dist").getString("tarball")
         } catch (_: Exception) {
             onLine("[update] registry 上没有 $pkg@$version")
             return null
