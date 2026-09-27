@@ -72,6 +72,19 @@ Phone-Agent.apk
 - **targetSdk 28 是刻意的**：Android 10+ 在 targetSdk ≥ 29 时禁止从应用私有目录 exec，内嵌 Node 必须放在 filesDir 执行（Termux 同款取舍）；本 APP 侧载分发，不受商店政策约束。
 - **后续路线（Zcode Web GUI）**：官方 monorepo 的 `packages/web`（React/Vite）+ `packages/zcode-server-cli`（Hono）可像 dsh 一样以 WebView 承载；CI 从锁定 ref 构建 `@zcode/web` dist + server bundle 即可。注意 server-cli 带守护进程/服务注册等桌面假设，需要适配，故暂列 v1.5。
 
+## 同类项目与借鉴
+
+调研过的先行项目（2026-09）：
+
+- [slopus/happy](https://github.com/slopus/happy)（23.9k⭐）— Claude Code/Codex 移动客户端，**遥控器流派**：agent 跑在电脑上（`npm i -g happy`），手机经自建 relay + E2EE 远程操控。UX 参考：会话跨设备恢复、完成通知、语音。
+- [siteboon/claudecodeui（CloudCLI）](https://github.com/siteboon/claudecodeui)（13.8k⭐）— 本机 Node 服务 + node-pty 网页终端 + 文件管理器的移动适配 Web UI，支持多 CLI。**Zcode Web GUI（v1.5）的直接实现蓝图**；注意 node-pty 是 native 模块，安卓上需 NDK 交叉编译。
+- [opcode（原 Claudia）](https://github.com/opcode-ws/opcode) — Tauri 桌面 GUI，功能设计参考（用量统计、checkpoint 管理）。zcode 的 JSONL 用量日志已有现成解析器（better-ccusage）。
+- [Magisk-Modules-Alt-Repo/node](https://github.com/Magisk-Modules-Alt-Repo/node) / DerGoot 的 Systemless Node.js — **与本项目 root 集成完全同构的先例**（`system/usr/share/node` + `/system/bin` 包装脚本）。其包装脚本极简是因为用静态官方 Node；本项目用 Termux 动态链接 Node，wrapper 内设 `LD_LIBRARY_PATH` 是必要且正确的。该项目依赖 Systemless Mkshrc 伴随模块，本项目的 wrapper 自带环境变量，无此依赖。
+- [JaneaSystems/nodejs-mobile](https://github.com/JaneaSystems/nodejs-mobile) — 早期内嵌 Node 方案，已停更（Node 18，无法满足 zcode 的 ≥22.19）；验证了本项目"打包 Termux 仓库现代 Node 二进制"的路线选择。
+- [MatthewJamisonJS/claude-on-the-go](https://github.com/MatthewJamisonJS/claude-on-the-go) — 早期 WebSocket 桥接方案，同为遥控器流派。
+
+结论：**"把 agent CLI 本体装进 APK 在手机本机运行"目前没有现成完整先例**，本项目的各组成部分（Termux 二进制重打包、PTY 终端、WebView 承载 Web UI、Magisk 系统级命令）均有成熟参考并已被独立验证。
+
 ## 许可证
 
 本项目 Apache-2.0。第三方组件见 [NOTICE.md](NOTICE.md)（Termux 终端库 Apache-2.0；Node.js/npm MIT/ISC；zcode-app-cli MIT；@deepseek-ai/dsh MIT）。
