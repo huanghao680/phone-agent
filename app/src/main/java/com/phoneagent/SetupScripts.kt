@@ -21,7 +21,8 @@ object SetupScripts {
     }
 
     private fun cliInstallSnippet(): String {
-        val pkgs = "'file:${'$'}PKG/${Versions.ZCODE_TGZ}' 'file:${'$'}PKG/${Versions.DSH_TGZ}'"
+        // double quotes required: single quotes would stop $PKG from expanding
+        val pkgs = "\"file:${'$'}PKG/${Versions.ZCODE_TGZ}\" \"file:${'$'}PKG/${Versions.DSH_TGZ}\""
         return """
 if [ ! -f "${'$'}MARKER" ]; then
   while true; do
