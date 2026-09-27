@@ -28,6 +28,7 @@ object Notifications {
     const val CHANNEL = "phone_agent"
     const val ID_SESSION = 1
     const val ID_DSH = 2
+    const val ID_ZCODE_WEB = 3
 
     fun ensureChannel(ctx: Context) {
         val mgr = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

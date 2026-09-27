@@ -8,9 +8,13 @@ object Versions {
     const val RUNTIME = "node-26.4.0-1"
     const val ZCODE = "3.14.3-28"
     const val DSH = "0.1.5-rc.3"
+    const val ZCODE_UPSTREAM_REF = "v3.14.3"
 
     const val ZCODE_TGZ = "zcode-app-cli-$ZCODE.tgz"
     const val DSH_TGZ = "deepseek-ai-dsh-$DSH.tgz"
+
+    /** Marker for the extracted official web UI + server bundle. */
+    const val ZCODE_WEB = "zcode-web-${ZCODE}-${ZCODE_UPSTREAM_REF}"
 
     /** Marker content stored after a successful CLI install. */
     fun packagesMarker(): String = "zcode-app-cli@$ZCODE @deepseek-ai/dsh@$DSH"

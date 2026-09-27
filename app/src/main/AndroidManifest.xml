@@ -43,10 +43,28 @@
             </intent-filter>
         </activity>
 
+        <!-- Launcher icon 3: official ZCode web UI -->
+        <activity
+            android:name=".ZcodeWebActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="true"
+            android:icon="@mipmap/ic_zcode_web"
+            android:label="@string/zcode_web_label"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_label" />
+
+        <service
+            android:name=".ZcodeWebService"
+            android:exported="false" />
 
         <service
             android:name=".DshService"
