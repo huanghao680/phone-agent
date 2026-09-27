@@ -13,12 +13,10 @@ import java.io.File
 object RootIntegration {
 
     const val MODULE_ID = "phone_agent"
-    private const val MODULE_DIR = "/data/adb/modules/$MODULE_ID"
+    /** Absolute module path; also shown by the settings UI. */
+    const val MODULE_DIR = "/data/adb/modules/$MODULE_ID"
 
     fun hasRoot(): Boolean = Shell.isAppGrantedRoot() == true
-
-    /** Convenience alias used by the settings UI. */
-    const val MODULE_DIR = "/data/adb/modules/$MODULE_ID"
 
     fun installModule(ctx: Context): List<String> {
         if (!hasRoot()) return listOf("未获得 root 授权（请在 root 管理器中允许 Phone-Agent）")
