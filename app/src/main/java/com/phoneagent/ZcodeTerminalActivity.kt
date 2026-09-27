@@ -45,6 +45,8 @@ class ZcodeTerminalActivity : AppCompatActivity() {
                 if (!NodeRuntime.isRuntimeExtracted(this)) {
                     NodeRuntime.extractRuntime(this)
                 }
+                // the terminal bootstrap script installs from these tarballs
+                NodeRuntime.copyPackages(this)
                 runOnUiThread {
                     loading.visibility = View.GONE
                     terminalView.visibility = View.VISIBLE
