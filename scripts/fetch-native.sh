@@ -8,6 +8,7 @@
 # file into the installed tree after `npm install --ignore-scripts`.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+REPO="$(pwd)"
 source scripts/versions.env
 
 ASSETS="app/src/main/assets/native/node-pty"
@@ -56,6 +57,6 @@ npx node-gyp rebuild --release --arch=arm64 --target="$NODE_UPSTREAM" --dist-url
 
 echo "== staging"
 ls -la build/Release/
-cp build/Release/pty.node "$ASSETS/pty.node"
-ls -la "$ASSETS"
+cp build/Release/pty.node "$REPO/$ASSETS/pty.node"
+ls -la "$REPO/$ASSETS"
 echo "== done"
