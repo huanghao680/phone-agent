@@ -23,4 +23,11 @@ object Prefs {
     fun setNpmRegistry(ctx: Context, v: String) {
         sp(ctx).edit().putString("npm_registry", v.trim()).apply()
     }
+
+    /** HTTP proxy for all Node network traffic, e.g. http://192.168.1.197:7890. Empty = direct. */
+    fun httpProxy(ctx: Context): String = sp(ctx).getString("http_proxy", "")?.trim() ?: ""
+
+    fun setHttpProxy(ctx: Context, v: String) {
+        sp(ctx).edit().putString("http_proxy", v.trim()).apply()
+    }
 }

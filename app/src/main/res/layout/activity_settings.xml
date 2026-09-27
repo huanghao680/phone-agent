@@ -48,6 +48,22 @@
             android:inputType="textUri"
             android:textColor="#E2E8F0" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="12dp"
+            android:text="HTTP 代理（可选；手机直连 registry 超时时填写，Node 不读系统 WiFi 代理）"
+            android:textColor="#94A3B8" />
+
+        <EditText
+            android:id="@+id/proxy_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="http://192.168.1.197:7890"
+            android:inputType="textUri"
+            android:textColor="#E2E8F0"
+            android:textColorHint="#475569" />
+
         <Switch
             android:id="@+id/root_switch"
             android:layout_width="match_parent"

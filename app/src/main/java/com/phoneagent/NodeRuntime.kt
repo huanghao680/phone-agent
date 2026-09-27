@@ -102,6 +102,16 @@ object NodeRuntime {
             "npm_config_registry" to Prefs.npmRegistry(ctx),
         )
         env.putAll(extra)
+        // Node ignores Android's WiFi proxy settings; on proxy-only networks every
+        // connect times out unless we push the proxy explicitly (NODE_USE_ENV_PROXY
+        // makes Node 24+ undici fetch honor HTTPS_PROXY, npm honors it natively).
+        val proxy = Prefs.httpProxy(ctx)
+        if (proxy.isNotEmpty()) {
+            env["HTTPS_PROXY"] = proxy
+            env["HTTP_PROXY"] = proxy
+            env["NO_PROXY"] = "localhost,127.0.0.1,::1"
+            env["NODE_USE_ENV_PROXY"] = "1"
+        }
         return env
     }
 }

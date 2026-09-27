@@ -21,14 +21,19 @@ class SettingsActivity : AppCompatActivity() {
 
         val keyInput = findViewById<EditText>(R.id.key_input)
         val registryInput = findViewById<EditText>(R.id.registry_input)
+        val proxyInput = findViewById<EditText>(R.id.proxy_input)
         keyInput.setText(Prefs.deepseekKey(this))
         registryInput.setText(Prefs.npmRegistry(this))
+        proxyInput.setText(Prefs.httpProxy(this))
 
         keyInput.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) Prefs.setDeepseekKey(this, keyInput.text.toString().trim())
         }
         registryInput.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) Prefs.setNpmRegistry(this, registryInput.text.toString().trim())
+        }
+        proxyInput.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) Prefs.setHttpProxy(this, proxyInput.text.toString().trim())
         }
 
         findViewById<Button>(R.id.install_module_btn).setOnClickListener {
