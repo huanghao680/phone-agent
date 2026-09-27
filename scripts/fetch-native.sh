@@ -43,6 +43,8 @@ cd "$WORK/package"
 # binding.gyp requires node-addon-api (devDependency) at configure time;
 # --ignore-scripts skips the prepare hook whose TS build needs excluded sources
 npm install --ignore-scripts --no-audit --no-fund --loglevel=error
+# Android bionic has openpty/forkpty in libc; there is no libutil to link
+sed -i '/-lutil/d' binding.gyp
 
 export CC_host=cc
 export CXX_host=c++
