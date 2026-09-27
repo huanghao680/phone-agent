@@ -8,7 +8,7 @@
 |---|---|---|
 | **Zcode** | 全屏 Web UI | CI 构建官方 `packages/web` SPA + Hono 服务端，内嵌 Node 跑 127.0.0.1:3030，WebView 呈现 |
 | **DeepSeek Harness** | 全屏 Web UI | 内嵌 Node 起 `dsh web`（127.0.0.1:3080），WebView 全屏呈现 |
-| **终端** | TUI 选择器 | 选跑 zcode TUI / dsh TUI（内嵌 Node + Termux 终端模拟器，真实 PTY）；opencode 因官方二进制为 glibc 构建暂不兼容（占位说明） |
+| **终端** | TUI 选择器 | 选跑 zcode TUI / dsh TUI（内嵌 Node + Termux 终端模拟器，真实 PTY）；opencode 因官方二进制为 glibc 构建暂不兼容（占位说明）。另含**用量统计**（读取 zcode 本机 SQLite 的 model_usage 表，按天/按模型汇总 token）
 
 外加**可选的 root 深度集成**：一键安装 Magisk 模块，把 `zcode` / `dsh` 命令装进 `/system/bin`——之后机内**任意终端**（Termux、adb shell、MT 管理器终端…）输入 `zcode` 即可打开 TUI，且**运行时不需要 root**。
 
@@ -39,7 +39,7 @@ Phone-Agent.apk
 
 ## 首次启动
 
-**Zcode（TUI）**：点开图标 → 自动解压内嵌 Node 运行时 → 终端里自动安装 zcode/dsh 组件（首次需联网，走设置里的 npm 镜像，默认 npmmirror；zcode/dsh 本体已离线内置）→ 进入 zcode TUI → 在 TUI 内执行 `/login` 完成 Z.AI OAuth 登录。
+**Zcode（TUI）**：点开图标 → 自动解压内嵌 Node 运行时 → 终端里自动安装 zcode/dsh 组件（首次需联网，走设置里的 npm 镜像，默认 npmmirror；zcode/dsh 本体已离线内置）→ 进入 zcode TUI → 在 TUI 内执行 `/login` 完成 Z.AI OAuth 登录。**会话自动恢复**：再次打开会带 `-c` 接续上一次会话（设置里可关）。会话退出后会发系统通知，点按可回到终端。
 
 **DeepSeek Harness**：点开图标 → 后台完成解压/安装后自动启动 `dsh web` → APP 从服务输出捕获一次性令牌 URL 并加载 → 全屏显示 Web UI（约需 1–2 分钟，首次更久）。DeepSeek API Key 在 **设置** 页填写，也可在 dsh 页面的 API Key 向导里填。
 
@@ -100,6 +100,14 @@ Phone-Agent.apk
 | vivo（PD2048） | Android 13，**无 root** | ✅ | ✅ | ✅（rename 预置配置，无需 root 补丁） | 不适用 |
 
 已知 Android 15+ 提示：`libtermux.so` 未做 16KB 页对齐会弹"不受支持"调试警告，**不影响运行**（release 版可通过 linker flags 消除）。
+
+## 已实现增强
+
+- **会话结束通知**：TUI 会话退出时发系统通知（含退出码），点按回到终端。
+- **会话自动恢复**：zcode 启动时若检测到历史会话（rollout），自动带 `-c` 接续；`PHONE_AGENT_RESUME=0` 可关。
+- **用量统计**：终端页的"用量统计"读取 zcode 本机 SQLite（`model_usage` 表），近 14 天按天、按模型汇总输入/输出/推理 tokens。真实 LLM 对话后才有数据。
+- **Agent 自更新**：设置页检查/更新 zcode 与 dsh（dsh 更新后自动重注入 node-pty 与 sharp-wasm32）。
+- **工作区选择**：设置页选任意文件夹（SAF），zcode/dsh 以它为工作根目录。
 
 ## 待办
 
