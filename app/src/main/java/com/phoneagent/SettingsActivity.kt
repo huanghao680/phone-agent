@@ -37,7 +37,10 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.install_module_btn).setOnClickListener {
-            confirm("安装系统级命令？", "将在 /data/adb/modules/$RootIntegration.MODULE_ID 安装 Magisk 模块（约 150MB 复制），重启后生效。") { doRoot { RootIntegration.installModule(this) } }
+            confirm(
+                "安装系统级命令？",
+                "将在 ${RootIntegration.MODULE_DIR} 安装 Magisk 模块（需复制约 150MB 运行时），重启后生效。",
+            ) { doRoot { RootIntegration.installModule(this) } }
         }
         findViewById<Button>(R.id.uninstall_module_btn).setOnClickListener {
             confirm("卸载系统级命令？", "将删除已安装的 Magisk 模块，重启后 zcode / dsh 系统命令失效。") { doRoot { RootIntegration.uninstallModule() } }
