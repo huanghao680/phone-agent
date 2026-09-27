@@ -90,12 +90,18 @@ if [ ! -f "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" ]; then
 fi
 
 WORKDIR="${'$'}{PHONE_AGENT_WORKSPACE:-}"
-if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
-  echo "[phone-agent] 工作区：${'$'}WORKDIR"
-  exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" --cwd "${'$'}WORKDIR"
+RESUME="${'$'}{PHONE_AGENT_RESUME:-1}"   # 1 = continue latest session when one exists
+RESUME_FLAG=""
+if [ "${'$'}RESUME" = "1" ] && [ -d "${'$'}HOME/.zcode" ] && ls "${'$'}HOME"/.zcode/*/rollout >/dev/null 2>&1; then
+  RESUME_FLAG="-c"
 fi
 
-exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js"
+if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
+  echo "[phone-agent] 工作区：${'$'}WORKDIR"
+  exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" ${'$'}RESUME_FLAG --cwd "${'$'}WORKDIR"
+fi
+
+exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" ${'$'}RESUME_FLAG
 """.trim() + "\n"
         return write(ctx, "run-zcode.sh", body)
     }

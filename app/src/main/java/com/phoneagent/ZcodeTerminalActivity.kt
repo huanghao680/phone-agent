@@ -83,7 +83,8 @@ class ZcodeTerminalActivity : AppCompatActivity() {
         )
         SessionHolder.current = session
         terminalView.attachSession(session)
-        startForegroundService(Intent(this, SessionService::class.java))
+        val svcIntent = Intent(this, SessionService::class.java).putExtra("agent", SessionHolder.pendingAgent)
+        startForegroundService(svcIntent)
     }
 
     @Deprecated("Deprecated in Java")
@@ -106,7 +107,12 @@ class ZcodeTerminalActivity : AppCompatActivity() {
 
         override fun onSessionFinished(finishedSession: TerminalSession) {
             runOnUiThread {
-                Toast.makeText(this@ZcodeTerminalActivity, "会话已结束（退出码 ${finishedSession.getExitStatus()}）", Toast.LENGTH_LONG).show()
+                val agent = when (SessionHolder.pendingAgent) {
+                    "dsh" -> "DeepSeek Harness"
+                    else -> "Zcode"
+                }
+                Notifications.sessionFinished(this@ZcodeTerminalActivity, agent, finishedSession.getExitStatus())
+                Toast.makeText(this@ZcodeTerminalActivity, "$agent 会话已结束（退出码 ${finishedSession.getExitStatus()}）", Toast.LENGTH_LONG).show()
             }
         }
 

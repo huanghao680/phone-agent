@@ -58,6 +58,11 @@
         </activity>
 
         <activity
+            android:name=".UsageActivity"
+            android:exported="false"
+            android:label="@string/usage_title" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_label" />

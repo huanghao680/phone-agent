@@ -44,6 +44,15 @@ class TerminalPickerActivity : AppCompatActivity() {
             v.findViewById<Button>(R.id.choice_btn).setOnClickListener { onPick(c.id) }
             root.addView(v)
         }
+
+        // usage stats (zcode session token accounting)
+        val usage = layoutInflater.inflate(R.layout.item_terminal_choice, root, false)
+        usage.findViewById<TextView>(R.id.choice_title).setText(R.string.usage_title)
+        usage.findViewById<TextView>(R.id.choice_desc).text = "zcode 会话的 token 用量（本机数据库）"
+        val ub = usage.findViewById<Button>(R.id.choice_btn)
+        ub.text = getString(R.string.usage_open)
+        ub.setOnClickListener { startActivity(Intent(this, UsageActivity::class.java)) }
+        root.addView(usage)
     }
 
     private fun onPick(id: String) {
