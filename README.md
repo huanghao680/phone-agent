@@ -40,7 +40,7 @@ Phone-Agent.apk
 
 **Zcode（TUI）**：点开图标 → 自动解压内嵌 Node 运行时 → 终端里自动安装 zcode/dsh 组件（首次需联网，走设置里的 npm 镜像，默认 npmmirror；zcode/dsh 本体已离线内置）→ 进入 zcode TUI → 在 TUI 内执行 `/login` 完成 Z.AI OAuth 登录。
 
-**DeepSeek Harness**：点开图标 → 后台完成解压/安装后自动启动 `dsh web` → 全屏 WebView 打开 `http://127.0.0.1:3080`。DeepSeek API Key 在 **设置** 页填写（也可在 dsh 配置里自行管理）。
+**DeepSeek Harness**：点开图标 → 后台完成解压/安装后自动启动 `dsh web` → APP 从服务输出捕获一次性令牌 URL 并加载 → 全屏显示 Web UI（约需 1–2 分钟，首次更久）。DeepSeek API Key 在 **设置** 页填写，也可在 dsh 页面的 API Key 向导里填。
 
 ## root 深度集成（可选）
 
@@ -62,7 +62,8 @@ Phone-Agent.apk
 ## 故障排查
 
 - **终端一闪而过 / exec 报错**：仅支持 arm64 设备（`uname -m` 应为 `aarch64`）。
-- **组件安装失败**：检查网络；在设置里换 npm 镜像（官方 `https://registry.npmjs.org` / npmmirror）后重进 APP。
+- **组件安装失败**：检查网络；若手机处在"必须走代理"的网络，在设置里填 **HTTP 代理**（Node 不读安卓系统 WiFi 代理，直连会全量超时）；必要时换 npm 镜像。
+- **`zcode` 报 EACCES（写配置失败）**：Android 11+ SELinux 禁止应用域硬链接，而 zcode 用 link() 原子写配置。root 用户点设置的"安装系统级命令"，模块会写入 `sepolicy.rule` 并实时放行（重启后自动续用）。
 - **后台会话被杀**：root 用户执行"修复幻象进程限制"；同时给 APP 关闭电池优化。
 - **dsh 打不开**：设置页填 DeepSeek API Key；看 `Android/data/com.phoneagent/cache/dsh.log`。
 - **通知不显示**：Android 13+ 在系统设置里手动允许通知（不影响功能）。
@@ -86,6 +87,17 @@ Phone-Agent.apk
 - [MatthewJamisonJS/claude-on-the-go](https://github.com/MatthewJamisonJS/claude-on-the-go) — 早期 WebSocket 桥接方案，同为遥控器流派。
 
 结论：**"把 agent CLI 本体装进 APK 在手机本机运行"目前没有现成完整先例**，本项目的各组成部分（Termux 二进制重打包、PTY 终端、WebView 承载 Web UI、Magisk 系统级命令）均有成熟参考并已被独立验证。
+
+## 真机验证状态
+
+已在两台设备实测通过（2026-09-27/28，构建 2c3546f+）：
+
+| 设备 | 系统 | Zcode TUI | DeepSeek Harness Web UI | root 系统级命令 |
+|---|---|---|---|---|
+| 乐视 Le Max 2 | LineageOS 18.1（Android 11）+ KernelSU | ✅ 完整渲染（v3.14.3-28 标题、模型配置向导、软键盘可输入） | ✅ 完整加载（内测声明→API Key 向导，可点击交互） | ✅ `/system/bin/zcode` 非 root 执行成功 |
+| 小米平板 4 | Android 17 + Magisk | ✅（同款 TUI） | ✅ Web UI 加载正常 | 未测（同为 Magisk，逻辑一致） |
+
+已知 Android 15+ 提示：`libtermux.so` 未做 16KB 页对齐会弹"不受支持"调试警告，**不影响运行**（release 版可通过 linker flags 消除）。
 
 ## 待办
 
