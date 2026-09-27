@@ -89,6 +89,12 @@ if [ ! -f "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" ]; then
   exec /system/bin/sh
 fi
 
+WORKDIR="${'$'}{PHONE_AGENT_WORKSPACE:-}"
+if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
+  echo "[phone-agent] 工作区：${'$'}WORKDIR"
+  exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" --cwd "${'$'}WORKDIR"
+fi
+
 exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js"
 """.trim() + "\n"
         return write(ctx, "run-zcode.sh", body)

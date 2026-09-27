@@ -115,6 +115,7 @@ object NodeRuntime {
             "NODE_PATH" to "$usr/lib/node_modules",
             "npm_config_registry" to Prefs.npmRegistry(ctx),
         )
+        env.putAll(Workspace.envOverlay(ctx))
         env.putAll(extra)
         // Node ignores Android's WiFi proxy settings; on proxy-only networks every
         // connect times out unless we push the proxy explicitly (NODE_USE_ENV_PROXY

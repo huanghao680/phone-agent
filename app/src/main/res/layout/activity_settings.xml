@@ -64,6 +64,40 @@
             android:textColor="#E2E8F0"
             android:textColorHint="#475569" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="16dp"
+            android:text="工作区目录（可选；授权后 zcode/dsh 以它为工作根目录）"
+            android:textColor="#94A3B8" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/pick_workspace_btn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="选择目录" />
+
+            <Button
+                android:id="@+id/clear_workspace_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="清除" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/workspace_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="未选择（默认使用 APP 私有目录）"
+            android:textColor="#94A3B8"
+            android:textIsSelectable="true" />
+
         <Switch
             android:id="@+id/root_switch"
             android:layout_width="match_parent"

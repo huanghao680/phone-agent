@@ -62,7 +62,11 @@ class DshService : Service() {
                     return
                 }
             }
-            val pb = ProcessBuilder(
+            // dsh uses the invoking directory as its workspace root
+            val workDir = File(
+                Workspace.workspacePath(this) ?: NodeRuntime.homeDir(this).absolutePath,
+            )
+            val args = mutableListOf(
                 NodeRuntime.nodeBin(this).absolutePath,
                 // --expose-internals is required by dsh's HMR plugin
                 "--expose-internals",
@@ -71,6 +75,8 @@ class DshService : Service() {
                 // --no-open: there is no desktop browser to spawn on Android
                 "--no-open",
             )
+            val pb = ProcessBuilder(args)
+            if (workDir.isDirectory) pb.directory(workDir)
             pb.environment().putAll(
                 NodeRuntime.environment(this, mapOf("DEEPSEEK_API_KEY" to Prefs.deepseekKey(this)))
             )

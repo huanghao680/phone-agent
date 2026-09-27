@@ -1,5 +1,6 @@
 package com.phoneagent
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -36,6 +37,24 @@ class SettingsActivity : AppCompatActivity() {
             if (!hasFocus) Prefs.setHttpProxy(this, proxyInput.text.toString().trim())
         }
 
+        val workspaceText = findViewById<TextView>(R.id.workspace_text)
+        fun refreshWorkspace() {
+            val path = Workspace.workspacePath(this)
+            workspaceText.text = when {
+                path == null -> "未选择（默认使用 APP 私有目录）"
+                Workspace.isGrantValid(this) -> path
+                else -> "$path（授权已失效，请重新选择）"
+            }
+        }
+        refreshWorkspace()
+        findViewById<Button>(R.id.pick_workspace_btn).setOnClickListener {
+            Workspace.pick(this)
+        }
+        findViewById<Button>(R.id.clear_workspace_btn).setOnClickListener {
+            Workspace.clear(this)
+            refreshWorkspace()
+        }
+
         findViewById<Button>(R.id.install_module_btn).setOnClickListener {
             confirm(
                 "安装系统级命令？",
@@ -56,6 +75,15 @@ class SettingsActivity : AppCompatActivity() {
                 filesDir.listFiles()?.filter { it.name.startsWith(".runtime-") }?.forEach { it.delete() }
                 Toast.makeText(this, "已重置，重新打开 Zcode / DeepSeek Harness 即可重建", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == Workspace.REQUEST_PICK && resultCode == RESULT_OK) {
+            data?.data?.let { Workspace.persist(this, it) }
+            recreate()
         }
     }
 

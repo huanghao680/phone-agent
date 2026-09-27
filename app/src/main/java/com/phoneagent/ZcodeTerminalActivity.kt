@@ -61,9 +61,10 @@ class ZcodeTerminalActivity : AppCompatActivity() {
         val env = NodeRuntime.environment(this)
             .map { (k, v) -> "$k=$v" }
             .toTypedArray()
+        val workDir = Workspace.workspacePath(this) ?: NodeRuntime.homeDir(this).absolutePath
         val session = TerminalSession(
             "/system/bin/sh",
-            NodeRuntime.homeDir(this).absolutePath,
+            workDir,
             arrayOf("/system/bin/sh", script.absolutePath),
             env,
             null,
@@ -72,6 +73,15 @@ class ZcodeTerminalActivity : AppCompatActivity() {
         SessionHolder.current = session
         terminalView.attachSession(session)
         startForegroundService(Intent(this, SessionService::class.java))
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == Workspace.REQUEST_PICK && resultCode == RESULT_OK) {
+            data?.data?.let { Workspace.persist(this, it) }
+            startSession()
+        }
     }
 
     private val sessionClient = object : TerminalSessionClient {
