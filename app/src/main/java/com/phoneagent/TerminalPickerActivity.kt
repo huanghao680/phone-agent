@@ -2,72 +2,176 @@ package com.phoneagent
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import kotlin.concurrent.thread
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Text as M3Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * Terminal entry point: pick which agent TUI to run in the shared terminal.
- *
  * Zcode and dsh run on the embedded Node; opencode ships glibc-compiled Bun
- * binaries with no bionic build, so it is listed with an honest "unsupported
- * on Android without Termux" explanation instead of failing mid-session.
+ * binaries with no bionic build, so it is listed with an honest unsupported
+ * note. Also hosts the settings and usage-stat entries.
  */
-class TerminalPickerActivity : AppCompatActivity() {
+class TerminalPickerActivity : ComponentActivity() {
+
+    private data class Choice(val id: String, val title: String, val desc: String, val available: Boolean)
+
+    private val choices = listOf(
+        Choice("zcode", "Zcode TUI", "Z.ai 的编码 Agent（内嵌 Node，自动安装）", true),
+        Choice("dsh", "DeepSeek Harness TUI", "DeepSeek 官方 Harness（内嵌 Node，自动安装）", true),
+        Choice(
+            "opencode",
+            "opencode TUI",
+            "官方二进制为 glibc 构建，安卓（bionic）暂不兼容",
+            false,
+        ),
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_terminal_picker)
-        setSupportActionBar(findViewById(R.id.toolbar))
-        supportActionBar?.title = getString(R.string.terminal_label)
-
-        val root = findViewById<LinearLayout>(R.id.picker_root)
-        val choices = listOf(
-            TerminalChoice("zcode", "Zcode TUI", "Z.ai 的编码 Agent（内嵌 Node，自动安装）", true),
-            TerminalChoice("dsh", "DeepSeek Harness TUI", "DeepSeek 官方 Harness（内嵌 Node，自动安装）", true),
-            TerminalChoice(
-                "opencode",
-                "opencode TUI",
-                "SST 的开源 Agent —— 其官方二进制为 glibc 构建，安卓（bionic）暂不兼容，开发中",
-                false,
-            ),
-        )
-        for (c in choices) {
-            val v = layoutInflater.inflate(R.layout.item_terminal_choice, root, false)
-            v.findViewById<TextView>(R.id.choice_title).text = c.title
-            v.findViewById<TextView>(R.id.choice_desc).text = c.desc
-            v.findViewById<Button>(R.id.choice_btn).isEnabled = c.available
-            v.findViewById<Button>(R.id.choice_btn).setOnClickListener { onPick(c.id) }
-            root.addView(v)
-        }
-
-        // usage stats (zcode session token accounting)
-        val usage = layoutInflater.inflate(R.layout.item_terminal_choice, root, false)
-        usage.findViewById<TextView>(R.id.choice_title).setText(R.string.usage_title)
-        usage.findViewById<TextView>(R.id.choice_desc).text = "zcode 会话的 token 用量（本机数据库）"
-        val ub = usage.findViewById<Button>(R.id.choice_btn)
-        ub.text = getString(R.string.usage_open)
-        ub.setOnClickListener { startActivity(Intent(this, UsageActivity::class.java)) }
-        root.addView(usage)
-    }
-
-    private fun onPick(id: String) {
-        when (id) {
-            "zcode", "dsh" -> {
-                SessionHolder.pendingAgent = id
-                startActivity(Intent(this, ZcodeTerminalActivity::class.java))
+        setContent {
+            AppTheme {
+                PickerScreen()
             }
-            "opencode" -> AlertDialog.Builder(this)
-                .setTitle("opencode")
-                .setMessage("opencode 官方发布的是 glibc 编译的 Bun 二进制，当前安卓（bionic libc）无法直接运行。后续版本计划通过自编译 bionic 目标支持。")
-                .setPositiveButton("知道了", null)
-                .show()
         }
     }
 
-    private data class TerminalChoice(val id: String, val title: String, val desc: String, val available: Boolean)
+    @Composable
+    private fun PickerScreen() {
+        var selected by remember { mutableStateOf<String?>(null) }
+        Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
+            TopAppBar(title = "终端")
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    SectionTitle("选择要运行的 TUI")
+                }
+                items(choices, key = { it.id }) { c ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = c.available) { selected = c.id },
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                M3Text(
+                                    c.title,
+                                    color = if (c.available) MiuixTheme.colorScheme.onSurface
+                                    else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Spacer(Modifier.weight(1f))
+                                if (!c.available) {
+                                    M3Text("不可用", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            M3Text(
+                                c.desc,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 13.sp,
+                            )
+                        }
+                    }
+                }
+                item {
+                    SectionTitle("工具")
+                }
+                item {
+                    PickerCard("用量统计", "zcode 会话的 token 用量（本机数据库）") {
+                        startActivity(Intent(this@TerminalPickerActivity, UsageActivity::class.java))
+                    }
+                }
+                item {
+                    PickerCard("设置", "API Key / 镜像 / 代理 / 工作区 / 更新 / root") {
+                        startActivity(Intent(this@TerminalPickerActivity, SettingsActivity::class.java))
+                    }
+                }
+                item {
+                    Spacer(Modifier.height(24.dp))
+                    M3Text(
+                        "Phone Agent v${BuildConfig.VERSION_NAME}",
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+        selected?.let { id ->
+            // handled outside composition to avoid double launch on recomposition
+            selected = null
+            when (id) {
+                "zcode" -> startActivity(Intent(this, ZcodeTerminalActivity::class.java))
+                "dsh" -> startActivity(Intent(this, ZcodeTerminalActivity::class.java))
+            }
+        }
+    }
+
+    @Composable
+    private fun SectionTitle(text: String) {
+        M3Text(
+            text,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        )
+    }
+
+    @Composable
+    private fun PickerCard(title: String, desc: String, onClick: () -> Unit) {
+        Card(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
+            Column(Modifier.padding(16.dp)) {
+                M3Text(title, color = MiuixTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(2.dp))
+                M3Text(desc, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+/** Shared app theme: Miuix with a fixed key color matching the launcher icon. */
+@Composable
+fun AppTheme(content: @Composable () -> Unit) {
+    val dark = (resources.configuration.uiMode and
+        android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+        android.content.res.Configuration.UI_MODE_NIGHT_YES
+    val colors = if (dark) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
+    MiuixTheme(colors = colors, content = content)
 }

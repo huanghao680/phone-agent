@@ -1,33 +1,66 @@
 package com.phoneagent
 
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.os.Bundle
-import android.view.View
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text as M3Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
-import kotlin.concurrent.thread
 
-/**
- * Usage stats read from the embedded zcode CLI's own SQLite database
- * (~/.zcode/cli/db/db.sqlite, table `message`: token columns per assistant
- * turn). Opened from the terminal picker's stats row. Opened read-only.
- */
-class UsageActivity : AppCompatActivity() {
-
-    private lateinit var out: TextView
+/** Usage stats from the zcode CLI's SQLite model_usage ledger. */
+class UsageActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_usage)
-        setSupportActionBar(findViewById(R.id.toolbar))
-        supportActionBar?.title = getString(R.string.usage_title)
-        out = findViewById(R.id.usage_text)
-        thread(name = "usage-query") {
-            val text = query()
-            runOnUiThread { out.text = text }
-            findViewById<View>(R.id.loading).visibility = View.GONE
+        setContent {
+            AppTheme { UsageScreen() }
+        }
+    }
+
+    @Composable
+    private fun UsageScreen() {
+        var text by remember { mutableStateOf("读取中…") }
+        LaunchedEffect(Unit) {
+            text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { query() }
+        }
+        Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
+            TopAppBar(title = "用量统计")
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                Card(Modifier.fillMaxSize()) {
+                    M3Text(
+                        text,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
         }
     }
 
@@ -37,19 +70,15 @@ class UsageActivity : AppCompatActivity() {
         val f = db()
         if (!f.exists()) return getString(R.string.usage_empty)
         return try {
-            // SQLite WAL: copy db + wal to cache so the live CLI file isn't touched
+            // SQLite WAL: copy db + wal into cache so the live CLI file is untouched
             val tmp = File(cacheDir, "usage-copy.sqlite")
             val wal = File(f.parentFile, "db.sqlite-wal")
             f.inputStream().use { it.copyTo(tmp.outputStream()) }
-            if (wal.exists()) {
-                wal.inputStream().use { it.copyTo(File(cacheDir, "usage-copy.sqlite-wal").outputStream()) }
-            }
+            if (wal.exists()) wal.inputStream().use { it.copyTo(File(cacheDir, "usage-copy.sqlite-wal").outputStream()) }
             val dbc = SQLiteDatabase.openDatabase(tmp.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
             val sb = StringBuilder()
 
-            // per-day aggregates from the model_usage table (one row per model
-            // request; columns are flat integers — no JSON extraction needed)
-            val daily = mutableMapOf<String, LongArray>() // [in, out, reasoning, requests]
+            val daily = linkedMapOf<String, LongArray>() // [in, out, reasoning, requests]
             dbc.rawQuery(
                 "SELECT date(started_at/1000,'unixepoch','localtime') AS d," +
                     " SUM(input_tokens), SUM(output_tokens), SUM(reasoning_tokens), COUNT(*)" +
@@ -57,14 +86,11 @@ class UsageActivity : AppCompatActivity() {
                 null,
             ).use { c ->
                 while (c.moveToNext()) {
-                    val day = c.getString(0) ?: "?"
-                    daily[day] = longArrayOf(c.getLong(1), c.getLong(2), c.getLong(3), c.getLong(4))
+                    daily[c.getString(0) ?: "?"] =
+                        longArrayOf(c.getLong(1), c.getLong(2), c.getLong(3), c.getLong(4))
                 }
             }
-            var totalIn = 0L
-            var totalOut = 0L
-            var totalRe = 0L
-            var totalReq = 0L
+            var totalIn = 0L; var totalOut = 0L; var totalRe = 0L; var totalReq = 0L
             sb.append("近 14 天用量\n──────────────\n")
             for ((day, v) in daily) {
                 totalIn += v[0]; totalOut += v[1]; totalRe += v[2]; totalReq += v[3]
@@ -79,7 +105,6 @@ class UsageActivity : AppCompatActivity() {
                 .append("推理 ").append(fmt(totalRe)).append(" tokens\n")
                 .append("请求 ").append(totalReq).append(" 次\n")
 
-            // per-model breakdown
             dbc.rawQuery(
                 "SELECT provider_id || '/' || model_id, COUNT(*)," +
                     " SUM(input_tokens), SUM(output_tokens), SUM(reasoning_tokens)" +

@@ -2,167 +2,231 @@ package com.phoneagent
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.Switch
-import android.widget.TextView
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import kotlin.concurrent.thread
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Text as M3Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : ComponentActivity() {
 
-    private lateinit var status: TextView
+    private lateinit var pickWorkspace: ActivityResultLauncher<android.content.Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_settings)
-        status = findViewById(R.id.status)
-
-        val keyInput = findViewById<EditText>(R.id.key_input)
-        val registryInput = findViewById<EditText>(R.id.registry_input)
-        val proxyInput = findViewById<EditText>(R.id.proxy_input)
-        keyInput.setText(Prefs.deepseekKey(this))
-        registryInput.setText(Prefs.npmRegistry(this))
-        proxyInput.setText(Prefs.httpProxy(this))
-
-        keyInput.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) Prefs.setDeepseekKey(this, keyInput.text.toString().trim())
-        }
-        registryInput.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) Prefs.setNpmRegistry(this, registryInput.text.toString().trim())
-        }
-        proxyInput.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) Prefs.setHttpProxy(this, proxyInput.text.toString().trim())
-        }
-
-        val workspaceText = findViewById<TextView>(R.id.workspace_text)
-        fun refreshWorkspace() {
-            val path = Workspace.workspacePath(this)
-            workspaceText.text = when {
-                path == null -> "未选择（默认使用 APP 私有目录）"
-                Workspace.isGrantValid(this) -> path
-                else -> "$path（授权已失效，请重新选择）"
+        pickWorkspace = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+            if (r.resultCode == RESULT_OK) {
+                r.data?.data?.let { Workspace.persist(this, it) }
+                recreate()
             }
         }
-        refreshWorkspace()
-        findViewById<Button>(R.id.pick_workspace_btn).setOnClickListener {
-            Workspace.pick(this)
+        setContent {
+            AppTheme { SettingsScreen() }
         }
-        findViewById<Button>(R.id.clear_workspace_btn).setOnClickListener {
-            Workspace.clear(this)
-            refreshWorkspace()
-        }
+    }
 
-        // --- Agent updates ---
-        val updateStatus = findViewById<TextView>(R.id.update_status)
-        val updateZcode = findViewById<Button>(R.id.update_zcode_btn)
-        val updateDsh = findViewById<Button>(R.id.update_dsh_btn)
-        var infos: List<AgentUpdate.Info> = emptyList()
-        findViewById<Button>(R.id.check_updates_btn).setOnClickListener {
-            updateStatus.text = "检查中…（走设置里的镜像/代理）"
-            thread {
-                val result = try {
-                    AgentUpdate.status(this)
-                } catch (e: Exception) {
-                    emptyList()
-                }
-                runOnUiThread {
-                    infos = result
-                    if (result.isEmpty()) {
-                        updateStatus.text = "检查失败：registry 不可达（检查镜像/代理设置）"
-                    } else {
-                        updateStatus.text = result.joinToString("\n") { i ->
-                            val state = when {
-                                i.latest == "未知" -> "registry 不可达"
-                                i.installed == null -> "未安装"
-                                i.updateAvailable -> "${i.installed} → ${i.latest}（可更新）"
-                                else -> "${i.installed}（已是最新）"
-                            }
-                            "· ${i.name}: $state"
+    @Composable
+    private fun SettingsScreen() {
+        var deepseekKey by remember { mutableStateOf(Prefs.deepseekKey(this)) }
+        var registry by remember { mutableStateOf(Prefs.npmRegistry(this)) }
+        var proxy by remember { mutableStateOf(Prefs.httpProxy(this)) }
+        var workspaceText by remember {
+            mutableStateOf(Workspace.workspacePath(this) ?: "未选择（默认使用 APP 私有目录）")
+        }
+        var updateStatus by remember { mutableStateOf("点击检查后显示版本对比") }
+        var rootEnabled by remember { mutableStateOf(false) }
+        var rootLog by remember { mutableStateOf("") }
+
+        Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
+            TopAppBar(title = "设置")
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item { GroupTitle("凭据与网络") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FieldLabel("DeepSeek API Key（dsh 使用）")
+                            TextField(
+                                value = deepseekKey,
+                                onValueChange = { deepseekKey = it; Prefs.setDeepseekKey(this@SettingsActivity, it) },
+                                label = "sk-...",
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            FieldLabel("npm 镜像源")
+                            TextField(
+                                value = registry,
+                                onValueChange = { registry = it; Prefs.setNpmRegistry(this@SettingsActivity, it) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            FieldLabel("HTTP 代理（Node 不读系统 WiFi 代理）")
+                            TextField(
+                                value = proxy,
+                                onValueChange = { proxy = it; Prefs.setHttpProxy(this@SettingsActivity, it) },
+                                label = "http://192.168.1.197:7890",
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
-                        updateZcode.isEnabled = result.firstOrNull()?.updateAvailable == true
-                        updateDsh.isEnabled = result.lastOrNull()?.updateAvailable == true
                     }
                 }
-            }
-        }
-        fun runUpdate(pkg: String, onLine: (String) -> Unit) {
-            val ver = when (pkg) {
-                "zcode-app-cli" -> infos.firstOrNull { it.name == pkg }?.latest ?: return
-                else -> infos.firstOrNull { it.name == "@deepseek-ai/dsh" }?.latest ?: return
-            }
-            val tgz = AgentUpdate.fetchTarball(this, pkg, ver, onLine) ?: return
-            AgentUpdate.applyUpdate(this, pkg, tgz, onLine)
-        }
-        updateZcode.setOnClickListener {
-            updateStatus.text = "更新 zcode 中…"
-            thread {
-                val log = StringBuilder()
-                runUpdate("zcode-app-cli") { line -> log.appendLine(line) }
-                runOnUiThread { updateStatus.text = log.toString() }
-            }
-        }
-        updateDsh.setOnClickListener {
-            updateStatus.text = "更新 dsh 中…"
-            thread {
-                val log = StringBuilder()
-                runUpdate("@deepseek-ai/dsh") { line -> log.appendLine(line) }
-                runOnUiThread { updateStatus.text = log.toString() }
-            }
-        }
 
-        findViewById<Button>(R.id.install_module_btn).setOnClickListener {
-            confirm(
-                "安装系统级命令？",
-                "将在 ${RootIntegration.MODULE_DIR} 安装 Magisk 模块（需复制约 150MB 运行时），重启后生效。",
-            ) { doRoot { RootIntegration.installModule(this) } }
-        }
-        findViewById<Button>(R.id.uninstall_module_btn).setOnClickListener {
-            confirm("卸载系统级命令？", "将删除已安装的 Magisk 模块，重启后 zcode / dsh 系统命令失效。") { doRoot { RootIntegration.uninstallModule() } }
-        }
-        findViewById<Button>(R.id.phantom_btn).setOnClickListener {
-            confirm("修复幻象进程限制？", "将放宽系统对后台子进程的清理策略，避免终端会话被杀。") { doRoot { RootIntegration.fixPhantomProcesses() } }
-        }
-        findViewById<Button>(R.id.reinit_btn).setOnClickListener {
-            confirm("重新初始化运行时？", "将删除已解压的 Node 运行时和已安装组件，下次打开 APP 时重新解压安装。") {
-                NodeRuntime.usrDir(this).deleteRecursively()
-                NodeRuntime.pkgDir(this).deleteRecursively()
-                NodeRuntime.homeDir(this).deleteRecursively()
-                filesDir.listFiles()?.filter { it.name.startsWith(".runtime-") }?.forEach { it.delete() }
-                Toast.makeText(this, "已重置，重新打开 Zcode / DeepSeek Harness 即可重建", Toast.LENGTH_LONG).show()
+                item { GroupTitle("Agent 组件更新") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            M3Text(updateStatus, color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp)
+                            Spacer(Modifier.height(10.dp))
+                            UpdateRow("检查更新", enabled = true) {
+                                updateStatus = "检查中…"
+                                threadRun {
+                                    val result = try { AgentUpdate.status(this@SettingsActivity) } catch (e: Exception) { emptyList() }
+                                    ui {
+                                        updateStatus = if (result.isEmpty()) "检查失败：registry 不可达"
+                                        else result.joinToString("\n") { i ->
+                                            when {
+                                                i.latest == "未知" -> "· ${i.name}: registry 不可达"
+                                                i.installed == null -> "· ${i.name}: 未安装"
+                                                i.updateAvailable -> "· ${i.name}: ${i.installed} → ${i.latest}（可更新）"
+                                                else -> "· ${i.name}: ${i.installed}（已是最新）"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            UpdateRow("更新 zcode", enabled = AgentUpdate.status(this@SettingsActivity).firstOrNull()?.updateAvailable == true) {
+                                updateStatus = "更新 zcode 中…"
+                                threadRun {
+                                    val log = StringBuilder()
+                                    doUpdate("zcode-app-cli", log)
+                                    ui { updateStatus = log.toString() }
+                                }
+                            }
+                            UpdateRow("更新 dsh", enabled = AgentUpdate.status(this@SettingsActivity).lastOrNull()?.updateAvailable == true) {
+                                updateStatus = "更新 dsh 中…"
+                                threadRun {
+                                    val log = StringBuilder()
+                                    doUpdate("@deepseek-ai/dsh", log)
+                                    ui { updateStatus = log.toString() }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item { GroupTitle("工作区") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            M3Text(workspaceText, color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp)
+                            Spacer(Modifier.height(10.dp))
+                            UpdateRow("选择目录", enabled = true) {
+                                pickWorkspace.launch(
+                                    android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE)
+                                        .putExtra("android.provider.extra.INITIAL_URI", "content://com.android.externalstorage.documents/document/primary%3A")
+                                )
+                            }
+                            UpdateRow("清除", enabled = true) {
+                                Workspace.clear(this@SettingsActivity)
+                                workspaceText = "未选择（默认使用 APP 私有目录）"
+                            }
+                        }
+                    }
+                }
+
+                item { GroupTitle("root 深度集成（可选）") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            SwitchPreference(
+                                title = "启用 root 集成",
+                                summary = "安装 Magisk 模块暴露系统级 zcode/dsh 命令",
+                                checked = rootEnabled,
+                                onCheckedChange = { rootEnabled = it },
+                            )
+                            if (rootEnabled) {
+                                Spacer(Modifier.height(8.dp))
+                                UpdateRow("安装系统级命令", enabled = true) {
+                                    threadRun {
+                                        val lines = RootIntegration.installModule(this@SettingsActivity)
+                                        ui { rootLog = lines.joinToString("\n") }
+                                    }
+                                }
+                                UpdateRow("卸载系统级命令", enabled = true) {
+                                    threadRun {
+                                        val lines = RootIntegration.uninstallModule()
+                                        ui { rootLog = lines.joinToString("\n") }
+                                    }
+                                }
+                                UpdateRow("修复幻象进程限制", enabled = true) {
+                                    threadRun {
+                                        val lines = RootIntegration.fixPhantomProcesses()
+                                        ui { rootLog = lines.joinToString("\n") }
+                                    }
+                                }
+                            }
+                            if (rootLog.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                M3Text(rootLog, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    UpdateRow("重新初始化运行时", enabled = true) {
+                        NodeRuntime.usrDir(this@SettingsActivity).deleteRecursively()
+                        NodeRuntime.pkgDir(this@SettingsActivity).deleteRecursively()
+                        NodeRuntime.homeDir(this@SettingsActivity).deleteRecursively()
+                        filesDir.listFiles()?.filter { it.name.startsWith(".runtime-") || it.name.startsWith(".zcode-web-") }?.forEach { it.delete() }
+                        android.widget.Toast.makeText(this@SettingsActivity, "已重置", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                    Spacer(Modifier.height(24.dp))
+                }
             }
         }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == Workspace.REQUEST_PICK && resultCode == RESULT_OK) {
-            data?.data?.let { Workspace.persist(this, it) }
-            recreate()
-        }
+    private fun doUpdate(pkg: String, log: StringBuilder) {
+        val ver = AgentUpdate.status(this).firstOrNull { it.name == pkg }?.takeIf { it.updateAvailable }?.latest
+        if (ver == null) { log.appendLine("[update] $pkg 无可用更新"); return }
+        val tgz = AgentUpdate.fetchTarball(this, pkg, ver) { line -> log.appendLine(line) } ?: return
+        AgentUpdate.applyUpdate(this, pkg, tgz) { line -> log.appendLine(line) }
+    }
+    private fun threadRun(block: () -> Unit) {
+        kotlin.concurrent.thread { block() }
     }
 
-    private fun confirm(title: String, message: String, action: () -> Unit) {
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("确定") { _, _ -> action() }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun doRoot(block: () -> List<String>) {
-        status.text = "执行中…"
-        thread {
-            val lines = try {
-                block()
-            } catch (e: Exception) {
-                listOf("异常：${e.message}")
-            }
-            runOnUiThread { status.text = lines.joinToString("\n") }
-        }
+    private fun ui(block: () -> Unit) {
+        runOnUiThread(block)
     }
 }
