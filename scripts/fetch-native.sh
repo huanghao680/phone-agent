@@ -15,11 +15,20 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$ASSETS"
 
-# locate NDK installed by sdkmanager (workflow installs ndk;26.3.11579264)
-# pinned exactly: the runner's preinstalled NDK 27 may lack the r24 clang wrappers
+# locate any NDK that provides the android24 clang wrappers; the prebuilt dir
+# is named linux-x64 up to r26 and linux-x86_64 from r27 on
+CLANG_REL="toolchains/llvm/prebuilt/linux-x64/bin/aarch64-linux-android24-clang"
 NDK_DIR="$ANDROID_HOME/ndk/26.3.11579264"
-[ -d "$NDK_DIR" ] || { echo "!! NDK 26.3.11579264 missing at $NDK_DIR" >&2; exit 1; }
+[ -x "$NDK_DIR/$CLANG_REL" ] || NDK_DIR=""
+if [ -z "$NDK_DIR" ]; then
+  for d in "$ANDROID_HOME"/ndk/*/; do
+    if [ -x "$d$CLANG_REL" ]; then NDK_DIR="${d%/}"; break; fi
+    if [ -x "$d/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" ]; then NDK_DIR="${d%/}"; break; fi
+  done
+fi
+[ -n "$NDK_DIR" ] || { echo "!! no NDK with android24 clang wrappers found" >&2; ls "$ANDROID_HOME/ndk" >&2 || true; exit 1; }
 TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x64/bin"
+[ -x "$TOOLCHAIN/aarch64-linux-android24-clang" ] || TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
 export CC="$TOOLCHAIN/aarch64-linux-android24-clang"
 export CXX="$TOOLCHAIN/aarch64-linux-android24-clang++"
 export AR="$TOOLCHAIN/llvm-ar"
