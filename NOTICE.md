@@ -8,7 +8,9 @@ This project bundles and redistributes the following third-party components.
   (modules `terminal-emulator`, `terminal-view`, including `src/main/jni/termux.c`)
 - License: Apache License 2.0 — see NOTICE-termux-app.md for the upstream license text.
 - Modified: Gradle build scripts rewritten for this project's toolchain;
-  unused test sources removed; ABI filter reduced to arm64-v8a.
+  unused test sources removed; ABI filter reduced to arm64-v8a; added a
+  null-renderer guard in `TerminalView.updateSize()` so early layout passes
+  cannot NPE before the host app calls `setTextSize()`.
 
 ## Node.js runtime (nodejs + dependency packages)
 

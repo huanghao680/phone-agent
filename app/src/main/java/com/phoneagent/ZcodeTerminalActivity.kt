@@ -2,6 +2,7 @@ package com.phoneagent
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -29,6 +30,10 @@ class ZcodeTerminalActivity : AppCompatActivity() {
         terminalView = findViewById(R.id.terminal)
         loading = findViewById(R.id.loading)
         terminalView.setTerminalViewClient(viewClient)
+        // TerminalRenderer is only created here (the view does not do it in its
+        // constructor); without this the first onSizeChanged NPEs on mRenderer.
+        val textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, resources.displayMetrics)
+        terminalView.setTextSize(textSize.toInt())
 
         val existing = SessionHolder.current
         if (existing != null && existing.isRunning()) {
