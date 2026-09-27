@@ -32,7 +32,10 @@ object Bootstrap {
         if (zcodeOk) marker(ctx, "zcode").writeText("ok")
         val dshOk = npmInstall(ctx, node, npm, usr, Versions.DSH_TGZ, ignoreScripts = true, onLine = onLine)
         if (dshOk) marker(ctx, "dsh").writeText("ok")
-        if (dshOk) injectPtyPrebuild(ctx, onLine)
+        if (dshOk) {
+            injectPtyPrebuild(ctx, onLine)
+            installSharpWasm(ctx, node, npm, usr, onLine)
+        }
         return dshOk // the dsh service only needs dsh; zcode is for the terminal
     }
 
@@ -89,5 +92,35 @@ object Bootstrap {
         dir.mkdirs()
         src.copyTo(File(dir, "pty.node"), overwrite = true)
         onLine("[phone-agent] 已注入 node-pty 安卓预编译。")
+    }
+
+    /**
+     * sharp publishes no android-arm64 binary; install the wasm32 universal
+     * build at the exact matching version so dsh's image features can load.
+     */
+    private fun installSharpWasm(ctx: Context, node: File, npm: File, usr: File, onLine: (String) -> Unit) {
+        val sharpPkg = File(usr, "lib/node_modules/@deepseek-ai/dsh/node_modules/sharp/package.json")
+        if (!sharpPkg.exists()) return
+        try {
+            val ver = org.json.JSONObject(sharpPkg.readText()).getString("version")
+            val probe = ProcessBuilder(
+                node.absolutePath, "-e",
+                "require.resolve('@img/sharp-wasm32/package.json',{paths:['${sharpPkg.parentFile}']})",
+            ).start()
+            if (probe.waitFor() == 0) return // already present
+            onLine("[phone-agent] 安装 @img/sharp-wasm32@$ver ...")
+            val pb = ProcessBuilder(
+                node.absolutePath, npm.absolutePath,
+                "install", "-g", "--prefix", usr.absolutePath,
+                "--ignore-scripts", "@img/sharp-wasm32@$ver",
+            )
+            pb.environment().putAll(NodeRuntime.environment(ctx))
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            p.inputStream.bufferedReader().forEachLine(onLine)
+            p.waitFor()
+        } catch (e: Exception) {
+            onLine("[phone-agent] sharp-wasm32 安装失败（dsh 图片功能受限）：${e.message}")
+        }
     }
 }

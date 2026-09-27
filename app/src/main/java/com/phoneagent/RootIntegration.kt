@@ -35,6 +35,19 @@ object RootIntegration {
         )
         File(sysBin, "zcode").writeText(SetupScripts.sysZcodeWrapper())
         File(sysBin, "dsh").writeText(SetupScripts.sysDshWrapper())
+        // Android 11+ SELinux blocks app-domain hard links; zcode's config writer
+        // uses link() atomically, so re-allow it for our domains (persisted by the
+        // module's sepolicy.rule, applied live below).
+        val seRules = listOf(
+            "allow untrusted_app_27 app_data_file file link",
+            "allow untrusted_app_27 app_data_file lnk_file create",
+            "allow untrusted_app_27 app_data_file lnk_file getattr",
+            "allow untrusted_app app_data_file file link",
+            "allow untrusted_app app_data_file lnk_file create",
+            "allow runas_app app_data_file file link",
+            "allow runas_app app_data_file lnk_file create",
+        )
+        File(staging, "sepolicy.rule").writeText(seRules.joinToString("\n") + "\n")
 
         val usr = NodeRuntime.usrDir(ctx).absolutePath
         val stg = staging.absolutePath
@@ -57,6 +70,14 @@ object RootIntegration {
             if (!r.isSuccess) allOk = false
             log += if (r.isSuccess) "[ok] $c" else "[fail] $c :: " + r.err.joinToString(" ")
         }
+        // live-apply the link rules so no reboot is needed for zcode's config writes
+        var seOk = true
+        for (rule in seRules) {
+            val r = Shell.cmd("ksud sepolicy patch \"$rule\" 2>/dev/null || magiskpolicy --live \"$rule\" 2>/dev/null").exec()
+            if (!r.isSuccess) seOk = false
+        }
+        log += if (seOk) "[ok] SELinux link 规则已实时应用（重启后由模块 sepolicy.rule 续用）"
+        else "[warn] SELinux 规则实时应用失败——重启后由模块自动应用；期间 zcode 写配置可能仍报 EACCES"
         log += if (allOk)
             "安装完成。重启手机后，任意终端输入 zcode / dsh 即可使用（无需 root 运行）。"
         else "安装过程中有步骤失败，请查看上方日志。"

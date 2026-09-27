@@ -57,6 +57,15 @@ if [ -f "${'$'}PKG/node-pty-prebuild/pty.node" ] && [ -d "${'$'}USR/lib/node_mod
   cp "${'$'}PKG/node-pty-prebuild/pty.node" "${'$'}PTY_DIR/"
   echo "[phone-agent] 已注入 node-pty 安卓预编译。"
 fi
+
+# sharp 没有 android-arm64 官方二进制；装 wasm32 通用构建（版本跟随 dsh 里的 sharp）
+if [ -d "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/sharp" ]; then
+  SHARP_VER=$("${'$'}NODE" -p "require('${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/sharp/package.json').version")
+  if ! "${'$'}NODE" -e "require.resolve('@img/sharp-wasm32/package.json',{paths:['${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/sharp']})" 2>/dev/null; then
+    echo "[phone-agent] 安装 @img/sharp-wasm32@${'$'}SHARP_VER（sharp 安卓替代）..."
+    "${'$'}NODE" "${'$'}NPMCLI" install -g --prefix "${'$'}USR" --ignore-scripts "@img/sharp-wasm32@${'$'}SHARP_VER" || echo "[phone-agent] sharp-wasm32 安装失败，dsh 图片功能将不可用。"
+  fi
+fi
 """.trim()
     }
 
