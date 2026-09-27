@@ -5,7 +5,7 @@ plugins {
 // Vendored from termux-app v0.118.1 (Apache-2.0). See NOTICE-termux-app.md.
 android {
     namespace = "com.termux.terminal"
-    compileSdk = 34
+    compileSdk = 37
     ndkVersion = "26.1.10909125"
 
     defaultConfig {

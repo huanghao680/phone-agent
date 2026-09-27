@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.phoneagent"
-    compileSdk = 34
+    // 37 required by Compose 1.12 / Miuix 0.9.4; targetSdk stays 28 by design
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.phoneagent"
