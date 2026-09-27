@@ -47,6 +47,9 @@ class ZcodeTerminalActivity : AppCompatActivity() {
                 }
                 // the terminal bootstrap script installs from these tarballs
                 NodeRuntime.copyPackages(this)
+                // Android 11+ blocks link(); seed config via rename so the CLI
+                // never has to create it with a hard link
+                ZcodeConfig.seed(this)
                 runOnUiThread {
                     loading.visibility = View.GONE
                     terminalView.visibility = View.VISIBLE
