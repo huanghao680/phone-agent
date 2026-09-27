@@ -87,6 +87,21 @@ Phone-Agent.apk
 
 结论：**"把 agent CLI 本体装进 APK 在手机本机运行"目前没有现成完整先例**，本项目的各组成部分（Termux 二进制重打包、PTY 终端、WebView 承载 Web UI、Magisk 系统级命令）均有成熟参考并已被独立验证。
 
+## 待办
+
+吸收自同类项目调研的路线图（详见上一节"同类项目与借鉴"）：
+
+**体验增强（低成本优先）**
+
+- [ ] **会话结束本地通知**（借鉴 happy）：zcode TUI 会话退出时发系统通知，点击回到 APP / 重开会话。落点：`ZcodeTerminalActivity` 的 `onSessionFinished` 回调，复用 `Notifications` 通道。
+- [ ] **会话跨重启恢复**（借鉴 happy）：APP 进程被杀后重新打开图标能接回上一次 zcode 会话（当前 `SessionHolder` 只能扛 Activity 重建，扛不住进程死亡）。落点：zcode CLI 原生支持 `--resume <sessionId>` / `-c`，把 sessionId 持久化到 SharedPreferences，启动脚本按需带参重启即可。
+- [ ] **用量统计页**（opcode 风格）：读取 zcode 的本地 JSONL 会话日志做模型用量/花费统计（社区已有解析先例 better-ccusage）。
+
+**里程碑 v1.5：Zcode Web GUI**
+
+- [ ] 优先走 dsh 已验证的同构路径：CI 从锁定 ref 构建官方 monorepo 的 `packages/web`（Vite 静态产物）+ `packages/zcode-server-cli`（Hono 服务端），APP 内嵌 Node 运行 + WebView 承载，零 root。
+- [ ] 备选路线：照 CloudCLI 架构自建（node-pty + WebSocket 网页终端）——`node-pty` 为 native 模块，需在 CI 用 NDK 交叉编译，工程量更大，仅在官方 server-cli 的守护进程假设无法安卓化时启用。
+
 ## 许可证
 
 本项目 Apache-2.0。第三方组件见 [NOTICE.md](NOTICE.md)（Termux 终端库 Apache-2.0；Node.js/npm MIT/ISC；zcode-app-cli MIT；@deepseek-ai/dsh MIT）。
