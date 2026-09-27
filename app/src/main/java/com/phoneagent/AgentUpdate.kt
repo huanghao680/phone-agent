@@ -38,20 +38,20 @@ object AgentUpdate {
         null
     }
 
-    fun installedVersions(ctx: Context): Triple<String?, String?, String?> {
+    fun installedVersions(ctx: Context): Pair<String?, String?> {
         val usr = NodeRuntime.usrDir(ctx)
-        fun ver(vararg path: String): String? = try {
-            JSONObject(File(usr, *path).readText()).getString("version")
+        fun ver(pkgPath: String): String? = try {
+            JSONObject(File(usr, pkgPath).readText()).getString("version")
         } catch (_: Exception) {
             null
         }
         val zcode = ver("lib/node_modules/zcode-app-cli/package.json")
         val dsh = ver("lib/node_modules/@deepseek-ai/dsh/package.json")
-        return Triple(zcode, dsh, null)
+        return Pair(zcode, dsh)
     }
 
     fun status(ctx: Context): List<Info> {
-        val (zcode, dsh, _) = installedVersions(ctx)
+        val (zcode, dsh) = installedVersions(ctx)
         val reg = registry(ctx)
         return listOf(
             Info("zcode-app-cli", zcode, latestVersion(ctx, "zcode-app-cli") ?: "未知"),
