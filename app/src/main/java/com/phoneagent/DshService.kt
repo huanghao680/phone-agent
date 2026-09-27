@@ -45,11 +45,11 @@ class DshService : Service() {
                 notify("正在解压 Node 运行时…")
                 NodeRuntime.extractRuntime(this)
             }
-            if (!Bootstrap.isInstalled(this)) {
+            if (!Bootstrap.isDshInstalled(this)) {
                 notify("正在安装 zcode / dsh 组件（首次需联网）…")
                 val ok = Bootstrap.install(this) { line -> appendLog(line) }
                 if (!ok) {
-                    DshState.lastError = "组件安装失败，检查网络/镜像后重试"
+                    DshState.lastError = "组件安装失败，检查网络/镜像/代理后重试"
                     notify(DshState.lastError!!)
                     return
                 }

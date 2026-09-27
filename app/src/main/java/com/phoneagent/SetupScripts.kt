@@ -22,23 +22,40 @@ object SetupScripts {
 
     private fun cliInstallSnippet(): String {
         // double quotes required: single quotes would stop $PKG from expanding
-        val pkgs = "\"file:${'$'}PKG/${Versions.ZCODE_TGZ}\" \"file:${'$'}PKG/${Versions.DSH_TGZ}\""
         return """
-if [ ! -f "${'$'}MARKER" ]; then
+install_pkg() {
+  TGZ="file:${'$'}PKG/${'$'}1"
+  MARKER="${'$'}USR/${'$'}2"
+  EXTRA="${'$'}3"
+  NAME="${'$'}4"
+  if [ -f "${'$'}MARKER" ]; then return 0; fi
   while true; do
-    echo "[phone-agent] 首次运行：安装 zcode / dsh（需联网，约 1-3 分钟）..."
-    if "${'$'}NODE" "${'$'}NPMCLI" install -g --prefix "${'$'}USR" $pkgs; then
+    echo "[phone-agent] 安装 ${'$'}NAME（需联网）..."
+    if "${'$'}NODE" "${'$'}NPMCLI" install -g --prefix "${'$'}USR" ${'$'}EXTRA "${'$'}TGZ"; then
       touch "${'$'}MARKER"
-      echo "[phone-agent] 组件安装完成。"
-      break
+      echo "[phone-agent] ${'$'}NAME 安装完成。"
+      return 0
     fi
-    echo "[phone-agent] 安装失败。请检查网络 / 设置中的 npm 镜像。"
-    echo "[phone-agent] 输入 r 重试，输入 s 进入 shell 排查（exit 返回）。"
+    echo "[phone-agent] ${'$'}NAME 安装失败。检查网络 / 镜像 / 设置中的 HTTP 代理。"
+    echo "[phone-agent] 输入 r 重试，输入 s 进入 shell 排查（exit 返回），输入 q 跳过。"
     read -r ans
     case "${'$'}ans" in
+      r|R) ;;
       s|S) /system/bin/sh ;;
+      q|Q) return 1 ;;
     esac
   done
+}
+
+# node-pty 需要安卓原生绑定：dsh 用 --ignore-scripts 安装，随后注入 CI 预编译产物
+install_pkg "${Versions.ZCODE_TGZ}" ".cli-installed-zcode" "" "zcode TUI"
+install_pkg "${Versions.DSH_TGZ}" ".cli-installed-dsh" "--ignore-scripts" "DeepSeek Harness"
+
+if [ -f "${'$'}PKG/node-pty-prebuild/pty.node" ] && [ -d "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty" ]; then
+  PTY_DIR="${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty/prebuilds/android-arm64"
+  mkdir -p "${'$'}PTY_DIR"
+  cp "${'$'}PKG/node-pty-prebuild/pty.node" "${'$'}PTY_DIR/"
+  echo "[phone-agent] 已注入 node-pty 安卓预编译。"
 fi
 """.trim()
     }
@@ -53,11 +70,15 @@ USR='$usr'
 PKG='${NodeRuntime.pkgDir(ctx).absolutePath}'
 NODE="${'$'}USR/bin/node"
 NPMCLI="${'$'}USR/lib/node_modules/npm/bin/npm-cli.js"
-MARKER="${'$'}USR/.cli-installed-${Versions.ZCODE}-${Versions.DSH}"
 NODE_PATH="${'$'}USR/lib/node_modules"
 export NODE_PATH
 
 ${cliInstallSnippet()}
+
+if [ ! -f "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" ]; then
+  echo "[phone-agent] zcode 未安装成功，进入 shell 以便排查（exit 退出）。"
+  exec /system/bin/sh
+fi
 
 exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js"
 """.trim() + "\n"

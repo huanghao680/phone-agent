@@ -37,6 +37,9 @@ object NodeRuntime {
     fun dshEntryJs(ctx: Context): File =
         File(usrDir(ctx), "lib/node_modules/@deepseek-ai/dsh/lib/bin.js")
 
+    fun isZcodeInstalled(ctx: Context): Boolean = zcodeEntryJs(ctx).exists()
+    fun isDshInstalled(ctx: Context): Boolean = dshEntryJs(ctx).exists()
+
     /**
      * Blocking; call from a worker thread. Extracts assets/runtime.tar.xz into
      * filesDir, preserving unix modes and symlinks. Idempotent across versions:
@@ -86,6 +89,15 @@ object NodeRuntime {
             ctx.assets.open("packages/$name").use { input ->
                 FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
             }
+        }
+        // CI-built node-pty android-arm64 binding (optional until fetch-native.sh runs)
+        try {
+            ctx.assets.open("native/node-pty/pty.node").use { input ->
+                val dir = File(pkgDir(ctx), "node-pty-prebuild").apply { mkdirs() }
+                FileOutputStream(File(dir, "pty.node")).use { input.copyTo(it, 1 shl 16) }
+            }
+        } catch (_: IOException) {
+            // asset absent: bootstrap continues without the dsh native binding
         }
     }
 

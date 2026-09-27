@@ -27,8 +27,14 @@ jobs:
         # AGP auto-installs missing platforms/build-tools/NDK once licenses are accepted.
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
 
+      - name: Install NDK (for node-pty cross-compile)
+        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264" >/dev/null
+
       - name: Stage embedded runtime (Node.js from Termux repo)
         run: bash scripts/fetch-runtime.sh
+
+      - name: Cross-compile node-pty for android-arm64
+        run: bash scripts/fetch-native.sh
 
       - name: Stage CLI packages (zcode / dsh)
         run: bash scripts/fetch-packages.sh

@@ -7,16 +7,17 @@ import java.io.File
  * First-run CLI installer: npm-install the bundled tarballs into the embedded
  * prefix. Used headlessly by DshService; the Zcode terminal runs the same
  * logic visibly through SetupScripts.zcodeScript().
+ *
+ * zcode installs normally (self-contained). dsh installs with --ignore-scripts
+ * because its node-pty dependency cannot compile on-device; the CI-built
+ * android-arm64 binding is injected afterwards from assets.
  */
 object Bootstrap {
 
-    fun isInstalled(ctx: Context): Boolean =
-        NodeRuntime.zcodeEntryJs(ctx).exists() && NodeRuntime.dshEntryJs(ctx).exists()
+    fun isZcodeInstalled(ctx: Context): Boolean = NodeRuntime.isZcodeInstalled(ctx)
+    fun isDshInstalled(ctx: Context): Boolean = NodeRuntime.isDshInstalled(ctx)
 
-    /**
-     * Blocking; call from a worker thread. Streams npm output lines to [onLine]
-     * and returns true on success (leaving the version marker behind).
-     */
+    /** Blocking; call from a worker thread. Streams npm output lines to [onLine]. */
     fun install(ctx: Context, onLine: (String) -> Unit): Boolean {
         NodeRuntime.copyPackages(ctx)
         val usr = NodeRuntime.usrDir(ctx)
@@ -26,28 +27,67 @@ object Bootstrap {
             onLine("[phone-agent] 运行时不完整，无法安装组件")
             return false
         }
-        val pb = ProcessBuilder(
+
+        val zcodeOk = npmInstall(ctx, node, npm, usr, Versions.ZCODE_TGZ, ignoreScripts = false, onLine = onLine)
+        if (zcodeOk) marker(ctx, "zcode").writeText("ok")
+        val dshOk = npmInstall(ctx, node, npm, usr, Versions.DSH_TGZ, ignoreScripts = true, onLine = onLine)
+        if (dshOk) marker(ctx, "dsh").writeText("ok")
+        if (dshOk) injectPtyPrebuild(ctx, onLine)
+        return dshOk // the dsh service only needs dsh; zcode is for the terminal
+    }
+
+    private fun marker(ctx: Context, name: String): File =
+        File(NodeRuntime.usrDir(ctx), ".cli-installed-$name")
+
+    private fun npmInstall(
+        ctx: Context,
+        node: File,
+        npm: File,
+        usr: File,
+        tgz: String,
+        ignoreScripts: Boolean,
+        onLine: (String) -> Unit,
+    ): Boolean {
+        if (File(usr, tgzToNodeModulesPath(tgz)).exists()) return true
+        val args = mutableListOf(
             node.absolutePath, npm.absolutePath,
             "install", "-g", "--prefix", usr.absolutePath,
-            "file:${File(NodeRuntime.pkgDir(ctx), Versions.ZCODE_TGZ).absolutePath}",
-            "file:${File(NodeRuntime.pkgDir(ctx), Versions.DSH_TGZ).absolutePath}",
         )
+        if (ignoreScripts) args.add("--ignore-scripts")
+        args.add("file:${File(NodeRuntime.pkgDir(ctx), tgz).absolutePath}")
+        val pb = ProcessBuilder(args)
         pb.environment().putAll(NodeRuntime.environment(ctx))
         pb.redirectErrorStream(true)
         return try {
             val p = pb.start()
             p.inputStream.bufferedReader().forEachLine(onLine)
             val code = p.waitFor()
-            if (code == 0) {
-                File(usr, ".cli-installed-${Versions.ZCODE}-${Versions.DSH}").writeText(Versions.packagesMarker())
-                true
-            } else {
-                onLine("[phone-agent] npm 退出码 $code")
-                false
-            }
+            if (code != 0) onLine("[phone-agent] npm 退出码 $code（$tgz）")
+            code == 0
         } catch (e: Exception) {
             onLine("[phone-agent] 安装异常：${e.message}")
             false
         }
+    }
+
+    private fun tgzToNodeModulesPath(tgz: String): String = when (tgz) {
+        Versions.ZCODE_TGZ -> "lib/node_modules/zcode-app-cli/package.json"
+        else -> "lib/node_modules/@deepseek-ai/dsh/package.json"
+    }
+
+    /** Copies the CI-built android-arm64 pty.node into dsh's node-pty prebuilds dir. */
+    private fun injectPtyPrebuild(ctx: Context, onLine: (String) -> Unit) {
+        val src = File(NodeRuntime.pkgDir(ctx), "node-pty-prebuild/pty.node")
+        if (!src.exists()) {
+            onLine("[phone-agent] 未找到 node-pty 预编译（dsh 网页终端将不可用）")
+            return
+        }
+        val dir = File(
+            NodeRuntime.usrDir(ctx),
+            "lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty/prebuilds/android-arm64",
+        )
+        dir.mkdirs()
+        src.copyTo(File(dir, "pty.node"), overwrite = true)
+        onLine("[phone-agent] 已注入 node-pty 安卓预编译。")
     }
 }
