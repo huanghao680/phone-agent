@@ -95,32 +95,43 @@ object Bootstrap {
     }
 
     /**
-     * sharp publishes no android-arm64 binary; install the wasm32 universal
-     * build at the exact matching version so dsh's image features can load.
+     * sharp publishes no android-arm64 binary. Its loader looks for
+     * @img/sharp-wasm32 inside sharp's OWN node_modules tree, so the wasm32
+     * package must be installed there (a global install is not found).
      */
     private fun installSharpWasm(ctx: Context, node: File, npm: File, usr: File, onLine: (String) -> Unit) {
-        val sharpPkg = File(usr, "lib/node_modules/@deepseek-ai/dsh/node_modules/sharp/package.json")
+        val sharpDir = File(usr, "lib/node_modules/@deepseek-ai/dsh/node_modules/sharp")
+        val sharpPkg = File(sharpDir, "package.json")
         if (!sharpPkg.exists()) return
         try {
             val ver = org.json.JSONObject(sharpPkg.readText()).getString("version")
-            val probe = ProcessBuilder(
-                node.absolutePath, "-e",
-                "require.resolve('@img/sharp-wasm32/package.json',{paths:['${sharpPkg.parentFile}']})",
-            ).start()
-            if (probe.waitFor() == 0) return // already present
-            onLine("[phone-agent] 安装 @img/sharp-wasm32@$ver ...")
+            if (File(sharpDir, "node_modules/@img/sharp-wasm32/package.json").exists()) return
+            onLine("[phone-agent] 安装 @img/sharp-wasm32@$ver 到 sharp 本地依赖树 ...")
             val pb = ProcessBuilder(
                 node.absolutePath, npm.absolutePath,
-                "install", "-g", "--prefix", usr.absolutePath,
-                "--ignore-scripts", "@img/sharp-wasm32@$ver",
+                "install", "--prefix", sharpDir.absolutePath,
+                "--no-save", "--no-package-lock", "--ignore-scripts",
+                "@img/sharp-wasm32@$ver",
             )
             pb.environment().putAll(NodeRuntime.environment(ctx))
+            pb.directory(sharpDir)
             pb.redirectErrorStream(true)
             val p = pb.start()
             p.inputStream.bufferedReader().forEachLine(onLine)
-            p.waitFor()
+            val code = p.waitFor()
+            onLine(
+                if (code == 0) "[phone-agent] sharp-wasm32 安装完成。"
+                else "[phone-agent] sharp-wasm32 安装失败（退出码 $code）"
+            )
         } catch (e: Exception) {
             onLine("[phone-agent] sharp-wasm32 安装失败（dsh 图片功能受限）：${e.message}")
         }
     }
+
+    /** Same fix for the terminal bootstrap path (SetupScripts mirrors this logic). */
+    fun sharpWasmCommand(sharpDir: File, ver: String): List<String> = listOf(
+        "install", "--prefix", sharpDir.absolutePath,
+        "--no-save", "--no-package-lock", "--ignore-scripts",
+        "@img/sharp-wasm32@$ver",
+    )
 }

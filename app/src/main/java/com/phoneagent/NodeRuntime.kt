@@ -107,6 +107,8 @@ object NodeRuntime {
             "PATH" to "$usr/bin:/system/bin:/system/xbin:/vendor/bin",
             "LD_LIBRARY_PATH" to "$usr/lib",
             "HOME" to homeDir(ctx).absolutePath,
+            // dsh's spill-local plugin mkdtemps in os.tmpdir(), which falls back
+            // to /data/local/tmp (EACCES for apps) unless TMPDIR is set here.
             "TMPDIR" to ctx.cacheDir.absolutePath,
             "TERM" to "xterm-256color",
             "LANG" to "en_US.UTF-8",

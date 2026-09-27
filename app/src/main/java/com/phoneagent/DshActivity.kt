@@ -50,7 +50,7 @@ class DshActivity : AppCompatActivity() {
         startForegroundService(Intent(this, DshService::class.java))
 
         thread(name = "dsh-connect") {
-            val deadline = System.currentTimeMillis() + 100_000
+            val deadline = System.currentTimeMillis() + 160_000
             while (System.currentTimeMillis() < deadline) {
                 if (DshState.serverReady) break
                 if (DshState.lastError != null) {
@@ -68,7 +68,7 @@ class DshActivity : AppCompatActivity() {
         if (DshState.serverReady) {
             errorBox.visibility = View.GONE
             webView.visibility = View.VISIBLE
-            webView.loadUrl("http://127.0.0.1:3080")
+            webView.loadUrl(DshState.startUrl ?: "http://127.0.0.1:3080")
         } else {
             errorText.text = DshState.lastError ?: getString(R.string.dsh_error)
             errorBox.visibility = View.VISIBLE

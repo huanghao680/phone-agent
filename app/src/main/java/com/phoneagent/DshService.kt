@@ -11,6 +11,12 @@ import kotlin.concurrent.thread
 object DshState {
     @Volatile var serverReady: Boolean = false
     @Volatile var lastError: String? = null
+
+    /**
+     * dsh prints a one-shot authenticated URL (`http://127.0.0.1:3080/?token=...`)
+     * and rejects unauthenticated requests, so the WebView must load this URL.
+     */
+    @Volatile var startUrl: String? = null
 }
 
 /**
@@ -18,6 +24,8 @@ object DshState {
  * 127.0.0.1:3080). First run also performs runtime extraction and CLI install.
  */
 class DshService : Service() {
+
+    private val TOKEN_RE = Regex("http://127\\.0\\.0\\.1:\\d+/\\?token=[A-Za-z0-9_-]+")
 
     private var proc: Process? = null
 
@@ -56,8 +64,12 @@ class DshService : Service() {
             }
             val pb = ProcessBuilder(
                 NodeRuntime.nodeBin(this).absolutePath,
+                // --expose-internals is required by dsh's HMR plugin
+                "--expose-internals",
                 NodeRuntime.dshEntryJs(this).absolutePath,
                 "web",
+                // --no-open: there is no desktop browser to spawn on Android
+                "--no-open",
             )
             pb.environment().putAll(
                 NodeRuntime.environment(this, mapOf("DEEPSEEK_API_KEY" to Prefs.deepseekKey(this)))
@@ -66,15 +78,20 @@ class DshService : Service() {
             val p = pb.start()
             proc = p
             thread(name = "dsh-log") {
-                p.inputStream.bufferedReader().forEachLine { appendLog(it) }
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    appendLog(line)
+                    TOKEN_RE.find(line)?.let { DshState.startUrl = it.value }
+                }
             }
             notify("等待 DeepSeek Harness 就绪…")
-            val ready = waitPort(3080, timeoutMs = 90_000)
+            // The port opens well before the web profile finishes booting; the
+            // real readiness signal is the authenticated URL printed on stdout.
+            val ready = awaitTokenUrl(timeoutMs = 150_000)
             if (ready) {
                 DshState.serverReady = true
-                notify("DeepSeek Harness 运行中：127.0.0.1:3080")
+                notify("DeepSeek Harness 运行中")
             } else {
-                DshState.lastError = "dsh 服务 90 秒内未就绪，详见 cache/dsh.log"
+                DshState.lastError = "dsh 未在 150 秒内就绪，详见 cache/dsh.log"
                 notify(DshState.lastError!!)
                 p.destroy()
             }
@@ -84,17 +101,14 @@ class DshService : Service() {
         }
     }
 
-    private fun waitPort(port: Int, timeoutMs: Long): Boolean {
+    private fun awaitTokenUrl(timeoutMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            if (proc == null) return false
-            try {
-                java.net.Socket("127.0.0.1", port).use { return true }
-            } catch (_: Exception) {
-                Thread.sleep(500)
-            }
+            if (DshState.startUrl != null) return true
+            if (proc?.isAlive == false) return false
+            Thread.sleep(500)
         }
-        return false
+        return DshState.startUrl != null
     }
 
     private fun appendLog(line: String) {
