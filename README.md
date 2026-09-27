@@ -1,13 +1,14 @@
 # Phone-Agent
 
-把 [Zcode](https://github.com/zai-org/ZCode) 和 [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 两个开源 AI Agent 移植到安卓（arm64、建议 Android 8+、已 root 更佳）的**独立 APP**——不依赖 Termux 应用。
+把 [Zcode](https://github.com/zai-org/ZCode)、[DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 和 [opencode](https://github.com/sst/opencode) 三个开源 AI Agent 移植到安卓（arm64、建议 Android 8+、已 root 更佳）的**独立 APP**——不依赖 Termux 应用。
 
-一个 APK，两个桌面图标：
+三个桌面图标：
 
 | 图标 | 形态 | 实现 |
 |---|---|---|
-| **Zcode** | 全屏终端 TUI | 内嵌 Node.js 运行时 + Termux 终端模拟器（Apache-2.0 源码），真实 PTY 里跑 `zcode` 交互式 TUI |
+| **Zcode** | 全屏 Web UI | CI 构建官方 `packages/web` SPA + Hono 服务端，内嵌 Node 跑 127.0.0.1:3030，WebView 呈现 |
 | **DeepSeek Harness** | 全屏 Web UI | 内嵌 Node 起 `dsh web`（127.0.0.1:3080），WebView 全屏呈现 |
+| **终端** | TUI 选择器 | 选跑 zcode TUI / dsh TUI（内嵌 Node + Termux 终端模拟器，真实 PTY）；opencode 因官方二进制为 glibc 构建暂不兼容（占位说明） |
 
 外加**可选的 root 深度集成**：一键安装 Magisk 模块，把 `zcode` / `dsh` 命令装进 `/system/bin`——之后机内**任意终端**（Termux、adb shell、MT 管理器终端…）输入 `zcode` 即可打开 TUI，且**运行时不需要 root**。
 
@@ -90,12 +91,13 @@ Phone-Agent.apk
 
 ## 真机验证状态
 
-已在两台设备实测通过（2026-09-27/28，构建 2c3546f+）：
+已在三台设备实测通过（2026-09-27/28，v0.2.0+）：
 
-| 设备 | 系统 | Zcode TUI | DeepSeek Harness Web UI | root 系统级命令 |
-|---|---|---|---|---|
-| 乐视 Le Max 2 | LineageOS 18.1（Android 11）+ KernelSU | ✅ 完整渲染（v3.14.3-28 标题、模型配置向导、软键盘可输入） | ✅ 完整加载（内测声明→API Key 向导，可点击交互） | ✅ `/system/bin/zcode` 非 root 执行成功 |
-| 小米平板 4 | Android 17 + Magisk | ✅（同款 TUI） | ✅ Web UI 加载正常 | 未测（同为 Magisk，逻辑一致） |
+| 设备 | 系统 | Zcode Web | dsh Web | 终端 TUI | root 系统级命令 |
+|---|---|---|---|---|---|
+| 乐视 Le Max 2 | LineageOS 18.1（Android 11）+ KernelSU | ✅ | ✅ | ✅ zcode/dsh | ✅ 非 root 执行成功 |
+| 小米平板 4 | Android 17 + Magisk | ✅ | ✅ | ✅ | 未测（逻辑一致） |
+| vivo（PD2048） | Android 13，**无 root** | ✅ | ✅ | ✅（rename 预置配置，无需 root 补丁） | 不适用 |
 
 已知 Android 15+ 提示：`libtermux.so` 未做 16KB 页对齐会弹"不受支持"调试警告，**不影响运行**（release 版可通过 linker flags 消除）。
 
