@@ -40,6 +40,8 @@ echo "== packing node-pty@$NODE_PTY_VERSION"
 npm pack "node-pty@$NODE_PTY_VERSION" --pack-destination "$WORK"
 tar -xzf "$WORK"/node-pty-*.tgz -C "$WORK"
 cd "$WORK/package"
+# binding.gyp requires node-addon-api (devDependency) at configure time
+npm install --no-audit --no-fund --loglevel=error
 
 export CC_host=cc
 export CXX_host=c++
