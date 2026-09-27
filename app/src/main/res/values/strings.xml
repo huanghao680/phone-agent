@@ -4,6 +4,9 @@
     <string name="zcode_label">Zcode</string>
     <string name="zcode_web_label">Zcode Web</string>
     <string name="zcode_web_loading">正在启动 Zcode Web 界面…</string>
+    <string name="terminal_label">终端</string>
+    <string name="terminal_open">打开</string>
+    <string name="terminal_pick">选择要运行的 TUI…</string>
     <string name="dsh_label">DeepSeek Harness</string>
     <string name="settings_label">Phone Agent 设置</string>
     <string name="initializing_runtime">正在初始化 Node 运行时…</string>

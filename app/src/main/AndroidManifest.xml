@@ -14,13 +14,13 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.PhoneAgent">
 
-        <!-- Launcher icon 1: Zcode TUI -->
+        <!-- Launcher icon 1: terminal picker (zcode / dsh / opencode TUI) -->
         <activity
-            android:name=".ZcodeTerminalActivity"
+            android:name=".TerminalPickerActivity"
             android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
             android:exported="true"
             android:icon="@mipmap/ic_zcode"
-            android:label="@string/zcode_label"
+            android:label="@string/terminal_label"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

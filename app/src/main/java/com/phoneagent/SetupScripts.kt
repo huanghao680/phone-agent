@@ -100,6 +100,63 @@ exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js"
         return write(ctx, "run-zcode.sh", body)
     }
 
+    /** Interactive dsh TUI bootstrap (Installs then exec's the dsh TUI). */
+    fun dshTuiScript(ctx: Context): File {
+        val usr = NodeRuntime.usrDir(ctx).absolutePath
+        val body = """
+#!/system/bin/sh
+# Phone-Agent: bootstrap then launch the dsh TUI.
+USR='$usr'
+PKG='${NodeRuntime.pkgDir(ctx).absolutePath}'
+NODE="${'$'}USR/bin/node"
+NPMCLI="${'$'}USR/lib/node_modules/npm/bin/npm-cli.js"
+NODE_PATH="${'$'}USR/lib/node_modules"
+export NODE_PATH
+
+install_pkg() {
+  TGZ="file:${'$'}PKG/${'$'}1"
+  MARKER="${'$'}USR/${'$'}2"
+  EXTRA="${'$'}3"
+  NAME="${'$'}4"
+  if [ -f "${'$'}MARKER" ]; then return 0; fi
+  while true; do
+    echo "[phone-agent] 安装 ${'$'}NAME（需联网）..."
+    if "${'$'}NODE" "${'$'}NPMCLI" install -g --prefix "${'$'}USR" ${'$'}EXTRA "${'$'}TGZ"; then
+      touch "${'$'}MARKER"
+      echo "[phone-agent] ${'$'}NAME 安装完成。"
+      return 0
+    fi
+    echo "[phone-agent] ${'$'}NAME 安装失败。检查网络 / 镜像 / 设置中的 HTTP 代理。"
+    echo "[phone-agent] 输入 r 重试，输入 s 进入 shell 排查（exit 返回），输入 q 跳过。"
+    read -r ans
+    case "${'$'}ans" in
+      r|R) ;;
+      s|S) /system/bin/sh ;;
+      q|Q) return 1 ;;
+    esac
+  done
+}
+
+install_pkg "${Versions.ZCODE_TGZ}" ".cli-installed-zcode" "" "zcode TUI"
+install_pkg "${Versions.DSH_TGZ}" ".cli-installed-dsh" "--ignore-scripts" "DeepSeek Harness"
+
+if [ -f "${'$'}PKG/node-pty-prebuild/pty.node" ] && [ -d "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty" ]; then
+  PTY_DIR="${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty/prebuilds/android-arm64"
+  mkdir -p "${'$'}PTY_DIR"
+  cp "${'$'}PKG/node-pty-prebuild/pty.node" "${'$'}PTY_DIR/"
+  echo "[phone-agent] 已注入 node-pty 安卓预编译。"
+fi
+
+if [ ! -f "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" ]; then
+  echo "[phone-agent] dsh 未安装成功，进入 shell 以便排查（exit 退出）。"
+  exec /system/bin/sh
+fi
+
+exec "${'$'}NODE" "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
+""".trim() + "\n"
+        return write(ctx, "run-dsh-tui.sh", body)
+    }
+
     /** /system/bin/zcode wrapper installed by the Magisk module (root integration). */
     fun sysZcodeWrapper(): String {
         return """

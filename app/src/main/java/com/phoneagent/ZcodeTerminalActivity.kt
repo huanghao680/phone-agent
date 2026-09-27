@@ -34,6 +34,10 @@ class ZcodeTerminalActivity : AppCompatActivity() {
         // constructor); without this the first onSizeChanged NPEs on mRenderer.
         val textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, resources.displayMetrics)
         terminalView.setTextSize(textSize.toInt())
+        title = when (SessionHolder.pendingAgent) {
+            "dsh" -> "DeepSeek Harness TUI"
+            else -> "Zcode TUI"
+        }
 
         val existing = SessionHolder.current
         if (existing != null && existing.isRunning()) {
@@ -60,7 +64,11 @@ class ZcodeTerminalActivity : AppCompatActivity() {
     }
 
     private fun startSession() {
-        val script = SetupScripts.zcodeScript(this)
+        val agent = SessionHolder.pendingAgent
+        val script = when (agent) {
+            "dsh" -> SetupScripts.dshTuiScript(this)
+            else -> SetupScripts.zcodeScript(this)
+        }
         val env = NodeRuntime.environment(this)
             .map { (k, v) -> "$k=$v" }
             .toTypedArray()
@@ -182,4 +190,7 @@ class ZcodeTerminalActivity : AppCompatActivity() {
 /** Keeps the terminal session alive across activity restarts. */
 object SessionHolder {
     @Volatile var current: TerminalSession? = null
+
+    /** Which agent TUI the user picked in TerminalPickerActivity ("zcode" | "dsh"). */
+    @Volatile var pendingAgent: String = "zcode"
 }

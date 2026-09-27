@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingBottom="12dp">
+
+    <TextView
+        android:id="@+id/choice_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#E2E8F0"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/choice_desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="8dp"
+        android:textColor="#94A3B8"
+        android:textSize="13sp" />
+
+    <Button
+        android:id="@+id/choice_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/terminal_open" />
+</LinearLayout>
