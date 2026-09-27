@@ -16,12 +16,15 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$ASSETS"
 
 # locate NDK installed by sdkmanager (workflow installs ndk;26.3.11579264)
-NDK_DIR="${ANDROID_NDK_HOME:-}"
-if [ -z "$NDK_DIR" ]; then
-  NDK_DIR="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V | tail -1)"
-fi
-[ -n "$NDK_DIR" ] || { echo "!! NDK not found" >&2; exit 1; }
+# pinned exactly: the runner's preinstalled NDK 27 may lack the r24 clang wrappers
+NDK_DIR="$ANDROID_HOME/ndk/26.3.11579264"
+[ -d "$NDK_DIR" ] || { echo "!! NDK 26.3.11579264 missing at $NDK_DIR" >&2; exit 1; }
 TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x64/bin"
+export CC="$TOOLCHAIN/aarch64-linux-android24-clang"
+export CXX="$TOOLCHAIN/aarch64-linux-android24-clang++"
+export AR="$TOOLCHAIN/llvm-ar"
+export STRIP="$TOOLCHAIN/llvm-strip"
+[ -x "$CC" ] || { echo "!! clang wrapper missing: $CC" >&2; ls "$TOOLCHAIN" | head -20 >&2; exit 1; }
 echo "== NDK: $NDK_DIR"
 
 echo "== packing node-pty@$NODE_PTY_VERSION"
@@ -29,10 +32,6 @@ npm pack "node-pty@$NODE_PTY_VERSION" --pack-destination "$WORK"
 tar -xzf "$WORK"/node-pty-*.tgz -C "$WORK"
 cd "$WORK/package"
 
-export CC="$TOOLCHAIN/aarch64-linux-android24-clang"
-export CXX="$TOOLCHAIN/aarch64-linux-android24-clang++"
-export AR="$TOOLCHAIN/llvm-ar"
-export STRIP="$TOOLCHAIN/llvm-strip"
 export CC_host=cc
 export CXX_host=c++
 export GYP_DEFINES="android_ndk_path=$NDK_DIR"
