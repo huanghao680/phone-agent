@@ -10,11 +10,11 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import kotlin.concurrent.thread
 
 /** DeepSeek Harness launcher icon target: foreground service + fullscreen WebView. */
-class DshActivity : AppCompatActivity() {
+class DshActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private lateinit var loading: View

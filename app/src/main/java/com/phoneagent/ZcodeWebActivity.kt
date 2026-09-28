@@ -8,11 +8,11 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import kotlin.concurrent.thread
 
 /** Third launcher icon: the official ZCode web UI served from the device itself. */
-class ZcodeWebActivity : AppCompatActivity() {
+class ZcodeWebActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private lateinit var loading: View
