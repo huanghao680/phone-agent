@@ -32,11 +32,29 @@ class DshActivity : ComponentActivity() {
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+        // fill the landscape viewport (the web app centers at a phone width)
+        webView.settings.useWideViewPort = true
+        webView.settings.loadWithOverviewMode = true
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, req: WebResourceRequest?, err: WebResourceError?) {
                 if (req?.isForMainFrame == true) {
                     errorText.text = err?.description ?: getString(R.string.dsh_error)
                 }
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                view?.evaluateJavascript(
+                    """
+                    (function(){
+                      var s=document.createElement('style');
+                      s.textContent='html,body{margin:0;padding:0;width:100%;height:100%;max-width:none!important;min-width:0!important;}'+
+                        '#root,.app,main,div[class*="layout"],div[class*="container"]{max-width:none!important;width:100%!important;}';
+                      document.head.appendChild(s);
+                    })();
+                    """.trimIndent(),
+                    null,
+                )
             }
         }
         connect()

@@ -30,7 +30,26 @@ class ZcodeWebActivity : ComponentActivity() {
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        webView.webViewClient = WebViewClient()
+        // make the SPA fill the landscape viewport: the web app centers itself
+        // at a phone-ish max-width, which leaves big black bars on wide screens
+        webView.settings.useWideViewPort = true
+        webView.settings.loadWithOverviewMode = true
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                view?.evaluateJavascript(
+                    """
+                    (function(){
+                      var s=document.createElement('style');
+                      s.textContent='html,body{margin:0;padding:0;width:100%;height:100%;max-width:none!important;min-width:0!important;}'+
+                        '#root,.app,main,div[class*="layout"],div[class*="container"]{max-width:none!important;width:100%!important;}';
+                      document.head.appendChild(s);
+                    })();
+                    """.trimIndent(),
+                    null,
+                )
+            }
+        }
         connect()
     }
 
