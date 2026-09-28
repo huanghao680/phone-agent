@@ -1,35 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/screen_bg">
+    android:background="@color/screen_bg"
+    android:orientation="vertical">
 
-    <com.termux.view.TerminalView
-        android:id="@+id/terminal"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:visibility="gone" />
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-    <LinearLayout
-        android:id="@+id/loading"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:gravity="center"
-        android:orientation="vertical">
+        <com.termux.view.TerminalView
+            android:id="@+id/terminal"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:visibility="gone" />
 
-        <ProgressBar
-            android:layout_width="48dp"
-            android:layout_height="48dp" />
-
-        <TextView
-            android:id="@+id/loading_text"
+        <LinearLayout
+            android:id="@+id/loading"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/initializing_runtime"
-            android:textColor="#E2E8F0" />
-    </LinearLayout>
-</FrameLayout>
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ProgressBar
+                android:layout_width="48dp"
+                android:layout_height="48dp" />
+
+            <TextView
+                android:id="@+id/loading_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/initializing_runtime"
+                android:textColor="#E2E8F0" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Termux-style extra keys row -->
+    <HorizontalScrollView
+        android:id="@+id/extra_keys_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#161B22"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/extra_keys"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingVertical="4dp" />
+    </HorizontalScrollView>
+</LinearLayout>

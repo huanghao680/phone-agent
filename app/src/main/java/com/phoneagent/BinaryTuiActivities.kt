@@ -43,6 +43,10 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
             terminalView.visibility = View.VISIBLE
             terminalView.requestFocus();
         terminalView.attachSession(existing)
+            ExtraKeys.attach(
+                findViewById(R.id.extra_keys),
+                findViewById(R.id.extra_keys_scroll),
+            ) { session }
             session = existing
         } else {
             thread(name = "$agentName-extract") {
@@ -79,6 +83,10 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
         session = s
         terminalView.requestFocus();
         terminalView.attachSession(s)
+        ExtraKeys.attach(
+            findViewById(R.id.extra_keys),
+            findViewById(R.id.extra_keys_scroll),
+        ) { session }
         startForegroundService(
             Intent(this, SessionService::class.java).putExtra("agent", agentName)
         )
