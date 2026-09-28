@@ -7,8 +7,8 @@ import java.util.zip.GZIPInputStream
 
 /**
  * Extracts and manages the codex / claude standalone binaries from their npm
- * platform tarballs (assets/terminal-extra/*.tgz), and checks the registry
- * for newer versions so the terminal picker can update them in place —
+ * platform tarballs (assets/terminal-extra), and checks the registry for
+ * newer versions so the terminal picker can update them in place —
  * same lifecycle as zcode/dsh, just raw binaries instead of npm installs.
  */
 object BinaryAgents {
