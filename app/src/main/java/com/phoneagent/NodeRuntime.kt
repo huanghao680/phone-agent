@@ -139,6 +139,10 @@ object NodeRuntime {
             // outside Termux that path is unreadable and TLS init fails, so point
             // OpenSSL at the config shipped with our runtime.
             "OPENSSL_CONF" to "$usr/etc/tls/openssl.cnf",
+            // curl/wget compiled for Termux look for CAs under the Termux prefix;
+            // Node's own fetch uses bundled CAs and is unaffected.
+            "CURL_CA_BUNDLE" to "$usr/etc/tls/cert.pem",
+            "SSL_CERT_FILE" to "$usr/etc/tls/cert.pem",
         )
         env.putAll(Workspace.envOverlay(ctx))
         env.putAll(extra)

@@ -79,3 +79,33 @@ if [ -f "$JSONL_JS" ]; then
 fi
 
 echo "[phone-agent] dsh Android patch done."
+
+# --- 3. shebang prefix rewrite -----------------------------------------------
+# npm/pkg and other runtime scripts carry #!/data/data/com.termux/... shebangs
+# from the Termux build; rewrite them to our prefix so `npm`/`pkg` work in the
+# agent's shell.
+COUNT=0
+for f in "$USR/bin/"* "$USR/lib/node_modules/"*/bin/* "$USR/lib/node_modules/"*/libexec/*; do
+  [ -f "$f" ] || continue
+  if head -c 60 "$f" 2>/dev/null | grep -q "com.termux"; then
+    sed -i "s|/data/data/com.termux/files/usr|$USR|g" "$f"
+    COUNT=$((COUNT+1))
+  fi
+done
+echo "[phone-agent] rewrote $COUNT shebangs to the app prefix."
+
+# --- 4. ripgrep shim for @vscode/ripgrep -------------------------------------
+# @vscode/ripgrep resolves @vscode/ripgrep-<platform>-<arch>/bin/rg; Node on
+# Android reports platform 'android' and no such package exists on npm. The
+# codex tarball ships a static musl rg that runs on Android — expose it under
+# the path @vscode/ripgrep expects.
+RG_SRC="$USR/../pkg/vendor/aarch64-unknown-linux-musl/codex-path/rg"
+RGRG_DIR="$USR/lib/node_modules/@deepseek-ai/dsh/node_modules/@vscode/ripgrep-android-arm64"
+if [ -x "$RG_SRC" ] && [ ! -f "$RGRG_DIR/bin/rg" ]; then
+  mkdir -p "$RGRG_DIR/bin"
+  cp "$RG_SRC" "$RGRG_DIR/bin/rg"
+  chmod 755 "$RGRG_DIR/bin/rg"
+  printf '%s\n' \
+    '{"name":"@vscode/ripgrep-android-arm64","version":"1.18.0","main":"bin/rg"}' > "$RGRG_DIR/package.json"
+  echo "[phone-agent] ripgrep shim installed (codex static rg)."
+fi
