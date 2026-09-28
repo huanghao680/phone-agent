@@ -6,8 +6,7 @@ plugins {
 
 android {
     namespace = "com.phoneagent"
-    // 37 required by Compose 1.12 / Miuix 0.9.4; targetSdk stays 28 by design
-    compileSdk = 37
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.phoneagent"
@@ -74,7 +73,7 @@ dependencies {
     implementation("org.tukaani:xz:1.9")
     implementation("com.github.topjohnwu.libsu:core:5.2.2")
 
-    val composeBom = platform("androidx.compose:compose-bom:2025.06.01")
+    val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.compose.ui:ui")
@@ -82,8 +81,6 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
 
-    val miuix = "0.9.4"
-    implementation("top.yukonga.miuix.kmp:miuix-core-android:$miuix")
-    implementation("top.yukonga.miuix.kmp:miuix-ui-android:$miuix")
-    implementation("top.yukonga.miuix.kmp:miuix-preference-android:$miuix")
+    // last miuix line compatible with androidx Compose 1.7 / compileSdk 34
+    implementation("top.yukonga.miuix.kmp:miuix-android:0.3.8")
 }

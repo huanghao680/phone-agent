@@ -29,7 +29,7 @@ jobs:
 
       - name: Install NDK (for node-pty cross-compile)
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264" "platforms;android-37" "build-tools;37.0.0"
           ls -d "$ANDROID_HOME"/ndk/*/ || true
 
       - name: Stage embedded runtime (Node.js from Termux repo)
@@ -47,7 +47,7 @@ jobs:
       - name: Build debug APK
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.11.1"
+          gradle-version: "8.9"
       - run: gradle :app:assembleDebug --no-daemon
 
       - name: Upload APK

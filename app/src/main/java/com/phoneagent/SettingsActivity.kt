@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class SettingsActivity : ComponentActivity() {
@@ -51,9 +50,9 @@ class SettingsActivity : ComponentActivity() {
 
     @Composable
     private fun SettingsScreen() {
-        var deepseekKey by remember { mutableStateOf(Prefs.deepseekKey(this)) }
-        var registry by remember { mutableStateOf(Prefs.npmRegistry(this)) }
-        var proxy by remember { mutableStateOf(Prefs.httpProxy(this)) }
+        var deepseekKey by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(Prefs.deepseekKey(this))) }
+        var registry by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(Prefs.npmRegistry(this))) }
+        var proxy by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(Prefs.httpProxy(this))) }
         var workspaceText by remember {
             mutableStateOf(Workspace.workspacePath(this) ?: "未选择（默认使用 APP 私有目录）")
         }
@@ -75,7 +74,10 @@ class SettingsActivity : ComponentActivity() {
                             FieldLabel("DeepSeek API Key（dsh 使用）")
                             TextField(
                                 value = deepseekKey,
-                                onValueChange = { deepseekKey = it; Prefs.setDeepseekKey(this@SettingsActivity, it) },
+                                onValueChange = {
+                                    deepseekKey = it
+                                    Prefs.setDeepseekKey(this@SettingsActivity, it.text)
+                                },
                                 label = "sk-...",
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
@@ -83,14 +85,20 @@ class SettingsActivity : ComponentActivity() {
                             FieldLabel("npm 镜像源")
                             TextField(
                                 value = registry,
-                                onValueChange = { registry = it; Prefs.setNpmRegistry(this@SettingsActivity, it) },
+                                onValueChange = {
+                                    registry = it
+                                    Prefs.setNpmRegistry(this@SettingsActivity, it.text)
+                                },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             FieldLabel("HTTP 代理（Node 不读系统 WiFi 代理）")
                             TextField(
                                 value = proxy,
-                                onValueChange = { proxy = it; Prefs.setHttpProxy(this@SettingsActivity, it) },
+                                onValueChange = {
+                                    proxy = it
+                                    Prefs.setHttpProxy(this@SettingsActivity, it.text)
+                                },
                                 label = "http://192.168.1.197:7890",
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
@@ -166,7 +174,7 @@ class SettingsActivity : ComponentActivity() {
                 item {
                     Card {
                         Column(Modifier.padding(16.dp)) {
-                            SwitchPreference(
+                            top.yukonga.miuix.kmp.extra.SuperSwitch(
                                 title = "启用 root 集成",
                                 summary = "安装 Magisk 模块暴露系统级 zcode/dsh 命令",
                                 checked = rootEnabled,
