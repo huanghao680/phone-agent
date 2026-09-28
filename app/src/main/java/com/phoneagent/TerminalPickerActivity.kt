@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text as M3Text
@@ -86,15 +85,18 @@ class TerminalPickerActivity : ComponentActivity() {
                             .clickable(enabled = c.available) { selected = c.id },
                     ) {
                         Column(Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
                                 M3Text(
                                     c.title,
                                     color = if (c.available) MiuixTheme.colorScheme.onSurface
                                     else MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
-                                Spacer(Modifier.weight(1f))
                                 if (!c.available) {
                                     M3Text("不可用", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)
                                 }
@@ -166,12 +168,10 @@ class TerminalPickerActivity : ComponentActivity() {
     }
 }
 
-/** Shared app theme: Miuix with a fixed key color matching the launcher icon. */
+/** Shared app theme: Miuix with system dark/light detection. */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    val dark = (resources.configuration.uiMode and
-        android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-        android.content.res.Configuration.UI_MODE_NIGHT_YES
+    val dark = androidx.compose.foundation.isSystemInDarkTheme()
     val colors = if (dark) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
     MiuixTheme(colors = colors, content = content)
 }
