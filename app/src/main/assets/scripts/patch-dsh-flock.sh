@@ -52,7 +52,7 @@ if [ -f "$JSONL_JS" ]; then
     $SED -i 's|import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, stat, truncate } from "node:fs/promises";|import { link as linkNative, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat, truncate } from "node:fs/promises";|' "$JSONL_JS"
 
     # insert the fallback wrapper right after the import line (line 4)
-    TMP="$DSH_DIR/node_modules/@deepseek-ai/dsh/tmp-link-patch.js"
+    TMP="$MOD/dsh-session-persistence-jsonl/lib/tmp-link-patch.js"
     head -n 4 "$JSONL_JS" > "$TMP"
     printf '%s\n' \
       "const link = async (f, t) => {" \
