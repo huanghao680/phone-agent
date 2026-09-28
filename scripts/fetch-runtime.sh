@@ -64,9 +64,18 @@ need() {
   done < <(echo "$deps" | tr ',' '\n')
 }
 
-echo "== resolving dependency closure for nodejs + npm"
+echo "== resolving dependency closure for nodejs + npm + shell tools"
 need nodejs
 need npm
+# agents shell out to bash for real work; Android has no bash and the shared
+# storage mount is noexec, so a working shell must come from the runtime
+need bash
+need coreutils
+need findutils
+need grep
+need sed
+need gawk
+need tar
 
 echo "== downloading and unpacking ${#RESOLVED[@]} packages"
 for pkg in "${RESOLVED[@]}"; do
