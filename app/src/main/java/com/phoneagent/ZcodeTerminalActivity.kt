@@ -7,7 +7,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -19,7 +19,7 @@ import kotlin.concurrent.thread
  * "Zcode" launcher icon target: fullscreen terminal running the embedded Node
  * runtime and the zcode TUI via a real PTY (Termux terminal-emulator).
  */
-class ZcodeTerminalActivity : AppCompatActivity() {
+class ZcodeTerminalActivity : ComponentActivity() {
 
     private lateinit var terminalView: TerminalView
     private lateinit var loading: View
