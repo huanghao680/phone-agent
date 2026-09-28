@@ -186,7 +186,9 @@ if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
   cd "${'$'}WORKDIR"
 fi
 
-exec "${'$'}BIN" --dangerously-bypass-approvals-and-sandbox
+# --no-daemon: the binary alone is not a complete npm package layout, and the
+# daemon mode requires one; standalone mode works without it
+exec "${'$'}BIN" --no-daemon --dangerously-bypass-approvals-and-sandbox
 """.trim() + "\n"
         return write(ctx, "run-codex.sh", body)
     }
