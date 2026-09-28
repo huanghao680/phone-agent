@@ -1,9 +1,14 @@
 package com.phoneagent
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text as M3Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,16 +33,24 @@ fun FieldLabel(text: String) {
 }
 
 /**
- * A simple text button row inside a Card. Kept as a helper because Miuix
- * preference components persist state themselves, which the update actions
- * (one-shot commands) don't want.
+ * A full-width action button with breathing room, used inside Miuix cards.
+ * The vertical padding here is what keeps stacked buttons from touching.
  */
 @Composable
 fun UpdateRow(label: String, enabled: Boolean, onClick: () -> Unit) {
-    top.yukonga.miuix.kmp.basic.TextButton(
-        text = label,
-        enabled = enabled,
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-    )
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        top.yukonga.miuix.kmp.basic.Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            M3Text(
+                label,
+                color = if (enabled) MiuixTheme.colorScheme.onPrimary
+                else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
 }

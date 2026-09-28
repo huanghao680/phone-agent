@@ -72,7 +72,7 @@ class ZcodeTerminalActivity : AppCompatActivity() {
         val env = NodeRuntime.environment(this)
             .map { (k, v) -> "$k=$v" }
             .toTypedArray()
-        val workDir = Workspace.workspacePath(this) ?: NodeRuntime.homeDir(this).absolutePath
+        val workDir = StorageAccess.defaultWorkspace(this)
         val session = TerminalSession(
             "/system/bin/sh",
             workDir,

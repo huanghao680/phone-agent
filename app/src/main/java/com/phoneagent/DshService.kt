@@ -64,7 +64,7 @@ class DshService : Service() {
             }
             // dsh uses the invoking directory as its workspace root
             val workDir = File(
-                Workspace.workspacePath(this) ?: NodeRuntime.homeDir(this).absolutePath,
+                StorageAccess.defaultWorkspace(this),
             )
             val args = mutableListOf(
                 NodeRuntime.nodeBin(this).absolutePath,

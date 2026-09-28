@@ -54,7 +54,7 @@ class ZcodeWebService : Service() {
                 notify(ZcodeWebState.lastError!!)
                 return
             }
-            val workDir = File(Workspace.workspacePath(this) ?: NodeRuntime.homeDir(this).absolutePath)
+            val workDir = File(StorageAccess.defaultWorkspace(this))
             val pb = ProcessBuilder(NodeRuntime.nodeBin(this).absolutePath, entry.absolutePath)
             if (workDir.isDirectory) pb.directory(workDir)
             pb.environment().putAll(
@@ -66,7 +66,7 @@ class ZcodeWebService : Service() {
                         "ZCODE_HOME" to NodeRuntime.homeDir(this).absolutePath,
                         "ZCODE_AGENT_SERVER_COMMAND" to NodeRuntime.zcodeEntryJs(this).absolutePath,
                         "ZCODE_AGENT_SERVER_CWD" to
-                            (Workspace.workspacePath(this) ?: NodeRuntime.homeDir(this).absolutePath),
+                            (StorageAccess.defaultWorkspace(this)),
                     ),
                 )
             )

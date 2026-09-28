@@ -156,15 +156,37 @@ class SettingsActivity : ComponentActivity() {
                         Column(Modifier.padding(16.dp)) {
                             M3Text(workspaceText, color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp)
                             Spacer(Modifier.height(10.dp))
-                            UpdateRow("选择目录", enabled = true) {
+                            var allFiles by remember {
+                                mutableStateOf(StorageAccess.isAllFilesGranted(this@SettingsActivity))
+                            }
+                            M3Text(
+                                if (allFiles) "已授予所有文件访问：agent 的文件对话框可直接浏览本机全部目录"
+                                else "授予「所有文件访问」后，agent 的文件对话框可直接选择本机任意目录（推荐）",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 13.sp,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            if (StorageAccess.needsSpecialScreen(this@SettingsActivity)) {
+                                UpdateRow("授予所有文件访问", enabled = true) {
+                                    startActivity(StorageAccess.buildAllFilesIntent())
+                                }
+                            } else {
+                                M3Text(
+                                    "本机存储可直接访问（Android 10 及以下自动生效）",
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 13.sp,
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            UpdateRow("精确选择单个目录（SAF，可选）", enabled = true) {
                                 pickWorkspace.launch(
                                     android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE)
                                         .putExtra("android.provider.extra.INITIAL_URI", "content://com.android.externalstorage.documents/document/primary%3A")
                                 )
                             }
-                            UpdateRow("清除", enabled = true) {
+                            UpdateRow("清除 SAF 目录", enabled = Workspace.workspacePath(this@SettingsActivity) != null) {
                                 Workspace.clear(this@SettingsActivity)
-                                workspaceText = "未选择（默认使用 APP 私有目录）"
+                                workspaceText = StorageAccess.defaultWorkspace(this@SettingsActivity)
                             }
                         }
                     }
