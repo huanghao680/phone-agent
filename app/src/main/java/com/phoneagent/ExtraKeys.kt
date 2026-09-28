@@ -36,7 +36,7 @@ object ExtraKeys {
     private val PGUP = byteArrayOf(0x1b, '['.code.toByte(), '5'.code.toByte(), '~'.code.toByte())
     private val PGDN = byteArrayOf(0x1b, '['.code.toByte(), '6'.code.toByte(), '~'.code.toByte())
 
-    private fun ctrl(c: Char): ByteArray = byteArrayOf(c.code.toByte() and 0x1f)
+    private fun ctrl(c: Char): ByteArray = byteArrayOf((c.code and 0x1f).toByte())
 
     private fun row(latched: Map<String, Boolean>) = listOf(
         Key("ESC", { ESC }),
