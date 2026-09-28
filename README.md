@@ -1,5 +1,7 @@
 # Phone-Agent
 
+> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。
+
 把 [Zcode](https://github.com/zai-org/ZCode)、[DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 和 [opencode](https://github.com/sst/opencode) 三个开源 AI Agent 移植到安卓（arm64、建议 Android 8+、已 root 更佳）的**独立 APP**——不依赖 Termux 应用。
 
 三个桌面图标：
