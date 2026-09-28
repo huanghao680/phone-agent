@@ -36,17 +36,19 @@ object StorageAccess {
         )
 
     /**
-     * Default cwd for agent processes: shared storage (/sdcard) so agents see
-     * the user's files. Explicit SAF workspace wins when set.
+     * Default cwd for agent processes: the app-private home.
      *
-     * Note: /storage/emulated/0 is a FUSE mount mounted noexec, so binaries
-     * must never be *spawned* from it — the runtime ships bash and the agent
-     * binaries under /data, which is executable, and only the working
-     * directory lives here.
+     * /storage/emulated/0 is a FUSE mount mounted noexec — spawning bash or
+     * ripgrep from it fails with EACCES, and its path normalization makes
+     * tools compute temp names one directory too high, so writes fail too.
+     * The private home is on a normal executable filesystem, which keeps the
+     * agent's bash/glob/grep/write tools working. Users can still point the
+     * workspace at a specific folder via the SAF picker (browsing files there
+     * works; only executing binaries from it is restricted by the platform).
      */
     fun defaultWorkspace(ctx: Context): String = when {
         Workspace.workspacePath(ctx) != null -> Workspace.workspacePath(ctx)!!
-        else -> Environment.getExternalStorageDirectory().absolutePath
+        else -> NodeRuntime.homeDir(ctx).absolutePath
     }
 
     /** True when the path is on the FUSE shared-storage mount (noexec). */
