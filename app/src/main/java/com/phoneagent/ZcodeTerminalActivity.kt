@@ -26,6 +26,9 @@ class ZcodeTerminalActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // picker passes the choice via extra; fall back to the holder so a
+        // relaunch from recents keeps the original agent
+        intent?.getStringExtra("agent")?.let { SessionHolder.pendingAgent = it }
         setContentView(R.layout.activity_zcode)
         terminalView = findViewById(R.id.terminal)
         loading = findViewById(R.id.loading)
@@ -40,7 +43,9 @@ class ZcodeTerminalActivity : ComponentActivity() {
         }
 
         val existing = SessionHolder.current
-        if (existing != null && existing.isRunning()) {
+        val existingMatches = existing != null && existing.isRunning() &&
+            SessionHolder.pendingAgent == SessionHolder.currentAgent
+        if (existingMatches) {
             loading.visibility = View.GONE
             terminalView.visibility = View.VISIBLE
             terminalView.attachSession(existing)
@@ -82,6 +87,7 @@ class ZcodeTerminalActivity : ComponentActivity() {
             sessionClient,
         )
         SessionHolder.current = session
+        SessionHolder.currentAgent = SessionHolder.pendingAgent
         terminalView.attachSession(session)
         val svcIntent = Intent(this, SessionService::class.java).putExtra("agent", SessionHolder.pendingAgent)
         startForegroundService(svcIntent)
@@ -199,4 +205,7 @@ object SessionHolder {
 
     /** Which agent TUI the user picked in TerminalPickerActivity ("zcode" | "dsh"). */
     @Volatile var pendingAgent: String = "zcode"
+
+    /** Agent the current session was started with, so a mismatched pick restarts it. */
+    @Volatile var currentAgent: String = "zcode"
 }

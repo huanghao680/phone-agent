@@ -139,8 +139,9 @@ class TerminalPickerActivity : ComponentActivity() {
             // handled outside composition to avoid double launch on recomposition
             selected = null
             when (id) {
-                "zcode" -> startActivity(Intent(this, ZcodeTerminalActivity::class.java))
-                "dsh" -> startActivity(Intent(this, ZcodeTerminalActivity::class.java))
+                "zcode", "dsh" -> startActivity(
+                    Intent(this, ZcodeTerminalActivity::class.java).putExtra("agent", id)
+                )
             }
         }
     }

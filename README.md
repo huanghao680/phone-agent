@@ -76,7 +76,7 @@ Phone-Agent.apk
 - **本地构建**：Linux/WSL 下 `bash scripts/fetch-runtime.sh && bash scripts/fetch-packages.sh`，然后 `gradle :app:assembleDebug`（需 JDK 17 + Android SDK）。Windows 上 assets 由 CI 产出。
 - **版本升级**：改 `scripts/versions.env` 与 `app/src/main/java/com/phoneagent/Versions.kt`（两者必须同步），重跑脚本 + 构建。
 - **targetSdk 28 是刻意的**：Android 10+ 在 targetSdk ≥ 29 时禁止从应用私有目录 exec，内嵌 Node 必须放在 filesDir 执行（Termux 同款取舍）；本 APP 侧载分发，不受商店政策约束。
-- **后续路线（Zcode Web GUI）**：官方 monorepo 的 `packages/web`（React/Vite）+ `packages/zcode-server-cli`（Hono）可像 dsh 一样以 WebView 承载；CI 从锁定 ref 构建 `@zcode/web` dist + server bundle 即可。注意 server-cli 带守护进程/服务注册等桌面假设，需要适配，故暂列 v1.5。
+- **后续路线（Zcode Web GUI）**：~~暂列 v1.5~~ **已于 0.2.0 落地**（`ZcodeWebActivity`，CI 构建官方 `packages/web` + `packages/server`）。
 
 ## 同类项目与借鉴
 
@@ -113,18 +113,9 @@ Phone-Agent.apk
 
 ## 待办
 
-吸收自同类项目调研的路线图（详见上一节"同类项目与借鉴"）：
-
-**体验增强（低成本优先）**
-
-- [ ] **会话结束本地通知**（借鉴 happy）：zcode TUI 会话退出时发系统通知，点击回到 APP / 重开会话。落点：`ZcodeTerminalActivity` 的 `onSessionFinished` 回调，复用 `Notifications` 通道。
-- [ ] **会话跨重启恢复**（借鉴 happy）：APP 进程被杀后重新打开图标能接回上一次 zcode 会话（当前 `SessionHolder` 只能扛 Activity 重建，扛不住进程死亡）。落点：zcode CLI 原生支持 `--resume <sessionId>` / `-c`，把 sessionId 持久化到 SharedPreferences，启动脚本按需带参重启即可。
-- [ ] **用量统计页**（opcode 风格）：读取 zcode 的本地 JSONL 会话日志做模型用量/花费统计（社区已有解析先例 better-ccusage）。
-
-**里程碑 v1.5：Zcode Web GUI**
-
-- [ ] 优先走 dsh 已验证的同构路径：CI 从锁定 ref 构建官方 monorepo 的 `packages/web`（Vite 静态产物）+ `packages/zcode-server-cli`（Hono 服务端），APP 内嵌 Node 运行 + WebView 承载，零 root。
-- [ ] 备选路线：照 CloudCLI 架构自建（node-pty + WebSocket 网页终端）——`node-pty` 为 native 模块，需在 CI 用 NDK 交叉编译，工程量更大，仅在官方 server-cli 的守护进程假设无法安卓化时启用。
+- [ ] **opencode 接入**：官方二进制为 glibc 编译的 Bun 单文件，无 bionic 目标。跟踪 Bun 上游对 Android 的支持，或评估 `opencode serve`（HTTP API + 内嵌 Web UI，packages/app）配合自编译二进制的可行性。
+- [ ] **dsh 用量统计**：dsh 的 token 落盘结构待真实对话数据确认后，接入现有用量页。
+- [ ] **16KB 页对齐**：`libtermux.so` 重编以消除 Android 15+ 的调试警告（linker flags）。
 
 ## 许可证
 
