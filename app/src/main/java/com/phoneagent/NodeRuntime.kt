@@ -99,6 +99,15 @@ object NodeRuntime {
         } catch (_: IOException) {
             // asset absent: bootstrap continues without the dsh native binding
         }
+        // dsh flock patch script for Android
+        try {
+            ctx.assets.open("scripts/patch-dsh-flock.sh").use { input ->
+                val dir = File(usrDir(ctx), "share/phone-agent").apply { mkdirs() }
+                FileOutputStream(File(dir, "patch-dsh-flock.sh")).use { input.copyTo(it, 1 shl 16) }
+            }
+        } catch (_: IOException) {
+            // asset absent: dsh flock patch skipped
+        }
         // codex / claude npm platform tarballs + musl loader for the terminal
         // picker (optional until fetch-terminal-extra.sh runs in CI)
         for (name in arrayOf("codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json")) {

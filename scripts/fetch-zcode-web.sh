@@ -59,9 +59,11 @@ cp "$REPO/$ASSETS/native/node-pty/pty.node" "$STAGE/node_modules/node-pty/prebui
 du -sh "$STAGE"
 
 # ship the server tree as one tarball: thousands of small npm files would
-# otherwise bloat the APK asset index and slow asset loading
-cd "$STAGE"
-tar -czf "$STAGE/zcode-server.tgz" dist package.json node_modules
+# otherwise bloat the APK asset index and slow asset loading.
+# entries are prefixed with zcode-server/ so extraction into filesDir yields
+# filesDir/zcode-server/{dist,package.json,node_modules}
+cd "$STAGE/.."
+tar -czf "$STAGE/zcode-server.tgz" zcode-server/dist zcode-server/package.json zcode-server/node_modules
 du -sh "$STAGE/zcode-server.tgz"
 
 echo "== done"

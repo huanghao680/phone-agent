@@ -93,7 +93,10 @@ class ZcodeWebService : Service() {
     /** Copies the bundled server runtime + SPA out of APK assets on first run. */
     private fun extractBundles() {
         val marker = File(filesDir, ".zcode-web-${Versions.ZCODE_WEB}")
-        if (marker.exists()) return
+        val serverEntry = File(filesDir, "zcode-server/dist/entry-http.js")
+        // self-heal: a stale marker from a failed/older extraction must not
+        // block re-extraction when the server entry is missing
+        if (marker.exists() && serverEntry.exists()) return
         notify("正在展开 Zcode Web 运行时…")
         // Server bundle ships as a single tarball to keep thousands of small
         // npm files out of the APK's asset index.

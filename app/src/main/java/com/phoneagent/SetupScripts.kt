@@ -58,6 +58,12 @@ if [ -f "${'$'}PKG/node-pty-prebuild/pty.node" ] && [ -d "${'$'}USR/lib/node_mod
   echo "[phone-agent] 已注入 node-pty 安卓预编译。"
 fi
 
+# Patch dsh 0.1.7+ flock.js for Android (platform check + linux-arm64 addon)
+PATCH_SCRIPT="${'$'}USR/share/phone-agent/patch-dsh-flock.sh"
+if [ -f "${'$'}PATCH_SCRIPT" ]; then
+  sh "${'$'}PATCH_SCRIPT"
+fi
+
 # sharp 没有 android-arm64 官方二进制；它的加载器只在 sharp 自己的 node_modules
 # 里找 @img/sharp-wasm32，必须装在本地依赖树中
 SHARP_DIR="${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/sharp"
@@ -153,12 +159,18 @@ if [ -f "${'$'}PKG/node-pty-prebuild/pty.node" ] && [ -d "${'$'}USR/lib/node_mod
   echo "[phone-agent] 已注入 node-pty 安卓预编译。"
 fi
 
+# Patch dsh 0.1.7+ flock.js for Android (platform check + linux-arm64 addon)
+PATCH_SCRIPT="${'$'}USR/share/phone-agent/patch-dsh-flock.sh"
+if [ -f "${'$'}PATCH_SCRIPT" ]; then
+  sh "${'$'}PATCH_SCRIPT"
+fi
+
 if [ ! -f "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" ]; then
   echo "[phone-agent] dsh 未安装成功，进入 shell 以便排查（exit 退出）。"
   exec /system/bin/sh
 fi
 
-exec "${'$'}NODE" "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
+exec "${'$'}NODE" "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" --profile tui
 """.trim() + "\n"
         return write(ctx, "run-dsh-tui.sh", body)
     }

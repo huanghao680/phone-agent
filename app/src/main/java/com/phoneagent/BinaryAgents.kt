@@ -66,32 +66,22 @@ object BinaryAgents {
                     var entry = tar.nextEntry
                     while (entry != null) {
                         val name = entry.name // package/...
-                        val relevant = when (agent) {
-                            CODEX -> name.startsWith("package/vendor/")
-                            else -> name.startsWith("package/") && !entry.isDirectory
-                        }
-                        if (!entry.isDirectory && relevant) {
-                            // strip "package/" prefix; keep inner layout intact
-                            val rel = name.removePrefix("package/")
-                            val out = when (agent) {
-                                CODEX -> File(pkg(ctx), rel) // pkg/vendor/.../bin/codex
-                                else -> File(pkg(ctx), agent) // pkg/claude
-                            }
-                            if (entry.isSymbolicLink) {
-                                out.parentFile?.mkdirs()
-                                out.delete()
-                                try {
-                                    java.nio.file.Files.createSymbolicLink(
-                                        out.toPath(),
-                                        java.nio.file.Paths.get(entry.linkName),
-                                    )
-                                } catch (_: Exception) {
+                        if (!entry.isDirectory) {
+                            when (agent) {
+                                // codex needs its full vendor tree (rg, sandbox,
+                                // voice companions) next to the binary
+                                CODEX -> if (name.startsWith("package/vendor/")) {
+                                    val out = File(pkg(ctx), name.removePrefix("package/"))
+                                    out.parentFile?.mkdirs()
                                     out.outputStream().use { tar.copyTo(it, 1 shl 16) }
+                                    out.setExecutable(true, false)
                                 }
-                            } else {
-                                out.parentFile?.mkdirs()
-                                out.outputStream().use { tar.copyTo(it, 1 shl 16) }
-                                out.setExecutable(true, false)
+                                // claude is a single binary launched by the loader
+                                CLAUDE -> if (name == "package/claude") {
+                                    val out = File(pkg(ctx), "claude")
+                                    out.outputStream().use { tar.copyTo(it, 1 shl 16) }
+                                    out.setExecutable(true, false)
+                                }
                             }
                         }
                         entry = tar.nextEntry
