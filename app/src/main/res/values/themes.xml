@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.PhoneAgent" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.PhoneAgent" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@color/ic_bg</item>
         <item name="android:windowLayoutInDisplayCutoutMode">never</item>
     </style>
