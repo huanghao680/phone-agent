@@ -16,7 +16,7 @@ android {
         // executable from filesDir. Same tradeoff Termux makes. Not distributed via Play.
         targetSdk = 28
         versionCode = 11
-        versionName = "0.6.0"
+        versionName = "0.6.1"
         ndk {
             abiFilters += "arm64-v8a"
         }

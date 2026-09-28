@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text as M3Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,9 +58,20 @@ class TerminalPickerActivity : ComponentActivity() {
     @Composable
     private fun PickerScreen() {
         var selected by remember { mutableStateOf<String?>(null) }
-        // availability depends on staged binaries; computed once per composition
-        val codexAvailable = remember { java.io.File(NodeRuntime.pkgDir(this), "codex").exists() }
-        val claudeAvailable = remember {
+        // availability depends on staged binaries; recomputed after extraction
+        var binReadyTick by remember { mutableStateOf(0) }
+        LaunchedEffect(Unit) {
+            // stage the codex/claude binaries on first open (idempotent), then
+            // refresh card availability
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (NodeRuntime.isRuntimeExtracted(this@TerminalPickerActivity)) {
+                    NodeRuntime.copyPackages(this@TerminalPickerActivity)
+                }
+            }
+            binReadyTick++
+        }
+        val codexAvailable = remember(binReadyTick) { java.io.File(NodeRuntime.pkgDir(this), "codex").exists() }
+        val claudeAvailable = remember(binReadyTick) {
             java.io.File(NodeRuntime.pkgDir(this), "claude").exists() &&
                 java.io.File(NodeRuntime.pkgDir(this), "ld-musl-aarch64.so.1").exists()
         }
