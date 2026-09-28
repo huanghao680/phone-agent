@@ -5,7 +5,7 @@ plugins {
 // Vendored from termux-app v0.118.1 (Apache-2.0). See NOTICE-termux-app.md.
 android {
     namespace = "com.termux.view"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26
