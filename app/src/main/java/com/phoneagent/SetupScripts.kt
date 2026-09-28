@@ -168,10 +168,10 @@ exec "${'$'}NODE" "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
         val usr = NodeRuntime.usrDir(ctx).absolutePath
         val body = """
 #!/system/bin/sh
-# Phone-Agent: launch the Codex CLI TUI (static musl binary).
+# Phone-Agent: launch the Codex CLI TUI (static musl binary + vendor tree).
 USR='$usr'
 PKG='${NodeRuntime.pkgDir(ctx).absolutePath}'
-BIN="${'$'}PKG/codex"
+BIN="${'$'}PKG/vendor/aarch64-unknown-linux-musl/bin/codex"
 
 if [ ! -x "${'$'}BIN" ]; then
   echo "[phone-agent] codex 二进制缺失（当前构建未包含）。"
@@ -186,8 +186,9 @@ if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
   cd "${'$'}WORKDIR"
 fi
 
-# --no-daemon: the binary alone is not a complete npm package layout, and the
-# daemon mode requires one; standalone mode works without it
+# PATH includes the bundled ripgrep/sandbox companions; --no-daemon because the
+# bare extraction is not a complete npm package layout
+export PATH="${'$'}PKG/vendor/aarch64-unknown-linux-musl/codex-path:${'$'}PATH"
 exec "${'$'}BIN" --no-daemon --dangerously-bypass-approvals-and-sandbox
 """.trim() + "\n"
         return write(ctx, "run-codex.sh", body)

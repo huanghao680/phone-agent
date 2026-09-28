@@ -50,7 +50,8 @@ class SettingsActivity : ComponentActivity() {
 
     @Composable
     private fun SettingsScreen() {
-        var deepseekKey by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(Prefs.deepseekKey(this))) }
+        Prefs.migrateLegacyKey(this) // move pre-0.7.0 plain-text key to encrypted storage
+        var deepseekKey by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(SecretStore.deepseekKey(this))) }
         var registry by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(Prefs.npmRegistry(this))) }
         var proxy by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(Prefs.httpProxy(this))) }
         var workspaceText by remember {
@@ -76,7 +77,7 @@ class SettingsActivity : ComponentActivity() {
                                 value = deepseekKey,
                                 onValueChange = {
                                     deepseekKey = it
-                                    Prefs.setDeepseekKey(this@SettingsActivity, it.text)
+                                    SecretStore.setDeepseekKey(this@SettingsActivity, it.text)
                                 },
                                 label = "sk-...",
                                 singleLine = true,

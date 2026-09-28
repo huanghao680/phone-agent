@@ -1,14 +1,13 @@
-.gradle/
-build/
-*/build/
-local.properties
-.idea/
-*.iml
-captures/
-.externalNativeBuild/
-.cxx/
 
 # generated at build time by scripts/fetch-*.sh (CI runs them before gradle)
+*.iml
+*/build/
+.cxx/
+.externalNativeBuild/
+.gradle/
+.idea/
 app/src/main/assets/
-dist/
+build/
+captures/
 dist*/
+local.properties

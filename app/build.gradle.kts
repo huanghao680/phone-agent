@@ -15,8 +15,8 @@ android {
         // storage when targetSdk >= 29 (W^X), and the embedded Node runtime must be
         // executable from filesDir. Same tradeoff Termux makes. Not distributed via Play.
         targetSdk = 28
-        versionCode = 16
-        versionName = "0.6.3"
+        versionCode = 17
+        versionName = "0.7.0"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -72,6 +72,7 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.26.2")
     implementation("org.tukaani:xz:1.9")
     implementation("com.github.topjohnwu.libsu:core:5.2.2")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
     implementation(composeBom)

@@ -6,16 +6,12 @@ import android.content.SharedPreferences
 object Prefs {
     private const val FILE = "phone_agent"
 
-    const val DEFAULT_REGISTRY = "https://registry.npmmirror.com"
+    // npmmirror went unreachable (verified 2026-09-28); Tencent's npm mirror
+    // is the same sync source and responded 200 for package queries
+    const val DEFAULT_REGISTRY = "https://mirrors.cloud.tencent.com/npm/"
 
     private fun sp(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-
-    fun deepseekKey(ctx: Context): String = sp(ctx).getString("deepseek_key", "") ?: ""
-
-    fun setDeepseekKey(ctx: Context, v: String) {
-        sp(ctx).edit().putString("deepseek_key", v).apply()
-    }
 
     fun npmRegistry(ctx: Context): String =
         sp(ctx).getString("npm_registry", DEFAULT_REGISTRY)!!.ifBlank { DEFAULT_REGISTRY }
@@ -29,5 +25,17 @@ object Prefs {
 
     fun setHttpProxy(ctx: Context, v: String) {
         sp(ctx).edit().putString("http_proxy", v.trim()).apply()
+    }
+
+    /**
+     * One-time migration: the DeepSeek key used to live in this plain file;
+     * move it to the encrypted store on first read after the upgrade.
+     */
+    fun migrateLegacyKey(ctx: Context) {
+        val legacy = sp(ctx).getString("deepseek_key", null)
+        if (!legacy.isNullOrEmpty()) {
+            SecretStore.setDeepseekKey(ctx, legacy)
+            sp(ctx).edit().remove("deepseek_key").apply()
+        }
     }
 }

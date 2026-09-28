@@ -126,6 +126,10 @@ object NodeRuntime {
             "LANG" to "en_US.UTF-8",
             "NODE_PATH" to "$usr/lib/node_modules",
             "npm_config_registry" to Prefs.npmRegistry(ctx),
+            // The Termux-built Node hardcodes /data/data/com.termux/.../openssl.cnf;
+            // outside Termux that path is unreadable and TLS init fails, so point
+            // OpenSSL at the config shipped with our runtime.
+            "OPENSSL_CONF" to "$usr/etc/tls/openssl.cnf",
         )
         env.putAll(Workspace.envOverlay(ctx))
         env.putAll(extra)

@@ -41,7 +41,8 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
         if (existing != null && existing.isRunning()) {
             loading.visibility = View.GONE
             terminalView.visibility = View.VISIBLE
-            terminalView.attachSession(existing)
+            terminalView.requestFocus();
+        terminalView.attachSession(existing)
             session = existing
         } else {
             thread(name = "$agentName-extract") {
@@ -76,6 +77,7 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
         )
         SessionHolder.binarySessions[agentName] = s
         session = s
+        terminalView.requestFocus();
         terminalView.attachSession(s)
         startForegroundService(
             Intent(this, SessionService::class.java).putExtra("agent", agentName)

@@ -48,7 +48,8 @@ class ZcodeTerminalActivity : ComponentActivity() {
         if (existingMatches) {
             loading.visibility = View.GONE
             terminalView.visibility = View.VISIBLE
-            terminalView.attachSession(existing)
+            terminalView.requestFocus();
+        terminalView.attachSession(existing)
         } else {
             thread(name = "runtime-extract") {
                 if (!NodeRuntime.isRuntimeExtracted(this)) {
@@ -88,6 +89,7 @@ class ZcodeTerminalActivity : ComponentActivity() {
         )
         SessionHolder.current = session
         SessionHolder.currentAgent = SessionHolder.pendingAgent
+        terminalView.requestFocus();
         terminalView.attachSession(session)
         val svcIntent = Intent(this, SessionService::class.java).putExtra("agent", SessionHolder.pendingAgent)
         startForegroundService(svcIntent)

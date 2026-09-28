@@ -78,7 +78,7 @@ class DshService : Service() {
             val pb = ProcessBuilder(args)
             if (workDir.isDirectory) pb.directory(workDir)
             pb.environment().putAll(
-                NodeRuntime.environment(this, mapOf("DEEPSEEK_API_KEY" to Prefs.deepseekKey(this)))
+                NodeRuntime.environment(this, mapOf("DEEPSEEK_API_KEY" to SecretStore.deepseekKey(this)))
             )
             pb.redirectErrorStream(true)
             val p = pb.start()

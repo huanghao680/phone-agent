@@ -23,7 +23,7 @@ object BinaryAgents {
     private fun pkg(ctx: Context): File = NodeRuntime.pkgDir(ctx)
 
     fun isReady(ctx: Context, agent: String): Boolean = when (agent) {
-        CODEX -> File(pkg(ctx), "codex").exists()
+        CODEX -> File(pkg(ctx), "vendor/aarch64-unknown-linux-musl/bin/codex").exists()
         CLAUDE -> File(pkg(ctx), "claude").exists() && File(pkg(ctx), "ld-musl-aarch64.so.1").exists()
         else -> false
     }
@@ -47,6 +47,10 @@ object BinaryAgents {
     /**
      * Ensures the binary is extracted. Runs on a worker thread; writes progress
      * to [onLine]. Returns true when the binary is present and executable.
+     *
+     * Codex needs its full vendor/ tree (rg, sandbox, voice resources) alongside
+     * the binary, so the whole package/vendor directory is preserved relative
+     * to the extracted binary. Claude is a single loader-launched binary.
      */
     fun ensure(ctx: Context, agent: String, onLine: (String) -> Unit): Boolean {
         if (isReady(ctx, agent)) return true
@@ -61,14 +65,34 @@ object BinaryAgents {
                 TarArchiveInputStream(gz).use { tar ->
                     var entry = tar.nextEntry
                     while (entry != null) {
-                        val name = entry.name // e.g. package/vendor/.../bin/codex or package/claude
-                        if (!entry.isDirectory && name.endsWith("/$agent")) {
-                            val out = File(pkg(ctx), agent)
-                            out.outputStream().use { tar.copyTo(it, 1 shl 16) }
-                            out.setExecutable(true, false)
-                            onLine("[binary] $agent 就绪（${"%.0f".format(out.length() / 1048576.0)}MB）")
-                            entry = null
-                            break
+                        val name = entry.name // package/...
+                        val relevant = when (agent) {
+                            CODEX -> name.startsWith("package/vendor/")
+                            else -> name.startsWith("package/") && !entry.isDirectory
+                        }
+                        if (!entry.isDirectory && relevant) {
+                            // strip "package/" prefix; keep inner layout intact
+                            val rel = name.removePrefix("package/")
+                            val out = when (agent) {
+                                CODEX -> File(pkg(ctx), rel) // pkg/vendor/.../bin/codex
+                                else -> File(pkg(ctx), agent) // pkg/claude
+                            }
+                            if (entry.isSymbolicLink) {
+                                out.parentFile?.mkdirs()
+                                out.delete()
+                                try {
+                                    java.nio.file.Files.createSymbolicLink(
+                                        out.toPath(),
+                                        java.nio.file.Paths.get(entry.linkName),
+                                    )
+                                } catch (_: Exception) {
+                                    out.outputStream().use { tar.copyTo(it, 1 shl 16) }
+                                }
+                            } else {
+                                out.parentFile?.mkdirs()
+                                out.outputStream().use { tar.copyTo(it, 1 shl 16) }
+                                out.setExecutable(true, false)
+                            }
                         }
                         entry = tar.nextEntry
                     }
