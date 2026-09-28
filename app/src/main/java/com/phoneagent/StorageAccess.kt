@@ -35,10 +35,12 @@ object StorageAccess {
             Uri.parse("package:com.phoneagent"),
         )
 
-    /** Default cwd for agent processes when no SAF workspace is configured. */
+    /**
+     * Default cwd for agent processes. Priority: explicit SAF workspace >
+     * shared storage root (/sdcard) > app-private home as last resort.
+     */
     fun defaultWorkspace(ctx: Context): String = when {
         Workspace.workspacePath(ctx) != null -> Workspace.workspacePath(ctx)!!
-        isAllFilesGranted(ctx) -> Environment.getExternalStorageDirectory().absolutePath
-        else -> NodeRuntime.homeDir(ctx).absolutePath
+        else -> Environment.getExternalStorageDirectory().absolutePath
     }
 }
