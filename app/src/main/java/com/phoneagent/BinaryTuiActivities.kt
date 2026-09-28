@@ -109,6 +109,7 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
             runOnUiThread { if (::terminalView.isInitialized) terminalView.onScreenUpdated() }
         }
         override fun onTerminalCursorStateChange(state: Boolean) {}
+        override fun getTerminalCursorStyle(): Int = com.termux.terminal.TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
         override fun logError(tag: String?, message: String?) {}
         override fun logWarn(tag: String?, message: String?) {}
         override fun logInfo(tag: String?, message: String?) {}
