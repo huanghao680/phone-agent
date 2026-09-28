@@ -29,7 +29,7 @@ jobs:
 
       - name: Install NDK (for node-pty cross-compile)
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264" "platforms;android-37" "build-tools;37.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264"
           ls -d "$ANDROID_HOME"/ndk/*/ || true
 
       - name: Stage embedded runtime (Node.js from Termux repo)
