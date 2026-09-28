@@ -150,15 +150,14 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
 class CodexTerminalActivity : BaseBinaryTuiActivity() {
     override val agentName = "Codex"
     override fun scriptFile() = SetupScripts.codexScript(this)
-    override fun binaryReady() = File(NodeRuntime.pkgDir(this), "codex").exists()
-    override fun binaryName() = "codex"
+    override fun binaryReady() = BinaryAgents.isReady(this, BinaryAgents.CODEX)
+    override fun binaryName() = BinaryAgents.CODEX
 }
 
 /** Claude Code terminal (musl binary launched via the bundled loader). */
 class ClaudeTerminalActivity : BaseBinaryTuiActivity() {
     override val agentName = "Claude Code"
     override fun scriptFile() = SetupScripts.claudeScript(this)
-    override fun binaryReady() = File(NodeRuntime.pkgDir(this), "claude").exists() &&
-        File(NodeRuntime.pkgDir(this), "ld-musl-aarch64.so.1").exists()
-    override fun binaryName() = "claude"
+    override fun binaryReady() = BinaryAgents.isReady(this, BinaryAgents.CLAUDE)
+    override fun binaryName() = BinaryAgents.CLAUDE
 }

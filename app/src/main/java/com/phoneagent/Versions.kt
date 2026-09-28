@@ -9,6 +9,8 @@ object Versions {
     const val ZCODE = "3.14.3-28"
     const val DSH = "0.1.5-rc.3"
     const val ZCODE_UPSTREAM_REF = "v3.14.3"
+    const val CODEX_VERSION = "0.157.1"
+    const val CLAUDE_VERSION = "2.1.283"
 
     const val ZCODE_TGZ = "zcode-app-cli-$ZCODE.tgz"
     const val DSH_TGZ = "deepseek-ai-dsh-$DSH.tgz"

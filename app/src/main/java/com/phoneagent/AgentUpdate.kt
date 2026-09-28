@@ -56,10 +56,10 @@ object AgentUpdate {
         return listOf(
             Info("zcode-app-cli", zcode, latestVersion(ctx, "zcode-app-cli") ?: "未知"),
             Info("@deepseek-ai/dsh", dsh, latestVersion(ctx, "@deepseek-ai/dsh") ?: "未知"),
-        ).map {
-            // registry may be a mirror; if the query failed show "未知" rather than blocking
-            if (it.latest == "未知" && reg != "https://registry.npmjs.org") it else it
-        }
+            // standalone binary agents (terminal picker)
+            Info("codex", BinaryAgents.installedVersion(ctx, BinaryAgents.CODEX), BinaryAgents.latestVersion(ctx, BinaryAgents.CODEX) ?: "未知"),
+            Info("claude", BinaryAgents.installedVersion(ctx, BinaryAgents.CLAUDE), BinaryAgents.latestVersion(ctx, BinaryAgents.CLAUDE) ?: "未知"),
+        )
     }
 
     /** Downloads [pkg]@[version] tarball into the pkg dir and returns the file. */
@@ -184,5 +184,32 @@ object AgentUpdate {
         } catch (e: Exception) {
             onLine("[update] sharp-wasm32 安装失败（图片功能受限）：${e.message}")
         }
+    }
+
+    /** Binary agents (codex/claude): download platform tgz to pkg and re-extract. */
+    fun updateBinaryAgent(ctx: Context, agent: String, version: String, onLine: (String) -> Unit): Boolean {
+        val tarball = when (agent) {
+            BinaryAgents.CODEX -> "${registry(ctx)}/@openai/codex/-/codex-$version-linux-arm64.tgz"
+            BinaryAgents.CLAUDE -> "${registry(ctx)}/@anthropic-ai%2fclaude-code-linux-arm64-musl/-/claude-code-linux-arm64-musl-$version.tgz"
+            else -> return false
+        }
+        val out = File(NodeRuntime.pkgDir(ctx), "$agent.tgz")
+        onLine("[update] 下载 $agent@$version ...")
+        try {
+            val conn = URL(tarball).openConnection() as HttpURLConnection
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 120_000
+            conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it, 1 shl 16) } }
+            onLine("[update] 下载完成：${"%.1f".format(out.length() / 1048576.0)}MB")
+        } catch (e: Exception) {
+            onLine("[update] 下载失败：${e.message}")
+            return false
+        }
+        File(NodeRuntime.pkgDir(ctx), ".$agent-version").delete()
+        val ok = BinaryAgents.ensure(ctx, agent, onLine)
+        if (ok) {
+            onLine("[update] $agent 更新完成 ✅")
+        }
+        return ok
     }
 }

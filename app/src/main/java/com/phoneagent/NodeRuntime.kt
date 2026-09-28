@@ -99,17 +99,16 @@ object NodeRuntime {
         } catch (_: IOException) {
             // asset absent: bootstrap continues without the dsh native binding
         }
-        // codex / claude / musl-loader binaries for the terminal picker
-        // (optional until fetch-terminal-extra.sh runs in CI)
-        for (name in arrayOf("codex", "claude", "ld-musl-aarch64.so.1")) {
+        // codex / claude npm platform tarballs + musl loader for the terminal
+        // picker (optional until fetch-terminal-extra.sh runs in CI)
+        for (name in arrayOf("codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json")) {
             try {
                 ctx.assets.open("terminal-extra/$name").use { input ->
                     val out = File(pkgDir(ctx), name)
                     FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
-                    out.setExecutable(true, false)
                 }
             } catch (_: IOException) {
-                // asset absent: picker shows the entry as unavailable
+                // asset absent: picker shows the entries as unavailable
             }
         }
     }

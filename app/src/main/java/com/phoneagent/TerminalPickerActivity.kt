@@ -70,11 +70,8 @@ class TerminalPickerActivity : ComponentActivity() {
             }
             binReadyTick++
         }
-        val codexAvailable = remember(binReadyTick) { java.io.File(NodeRuntime.pkgDir(this), "codex").exists() }
-        val claudeAvailable = remember(binReadyTick) {
-            java.io.File(NodeRuntime.pkgDir(this), "claude").exists() &&
-                java.io.File(NodeRuntime.pkgDir(this), "ld-musl-aarch64.so.1").exists()
-        }
+        val codexAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.CODEX) }
+        val claudeAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.CLAUDE) }
         val choices = listOf(
             Choice("zcode", "Zcode TUI", "Z.ai 的编码 Agent（内嵌 Node，自动安装）", true),
             Choice("dsh", "DeepSeek Harness TUI", "DeepSeek 官方 Harness（内嵌 Node，自动安装）", true),
