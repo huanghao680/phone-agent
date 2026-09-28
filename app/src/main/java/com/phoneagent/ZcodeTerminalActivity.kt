@@ -158,7 +158,11 @@ class ZcodeTerminalActivity : ComponentActivity() {
     private val viewClient = object : TerminalViewClient {
         override fun onScale(scale: Float): Float = scale
 
-        override fun onSingleTapUp(e: MotionEvent?) {}
+        override fun onSingleTapUp(e: MotionEvent?) {
+            terminalView.requestFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                .showSoftInput(terminalView, 0)
+        }
 
         override fun shouldBackButtonBeMappedToEscape(): Boolean = false
 

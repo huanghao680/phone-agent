@@ -123,7 +123,11 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
 
     protected val viewClient = object : TerminalViewClient {
         override fun onScale(scale: Float): Float = scale
-        override fun onSingleTapUp(e: MotionEvent?) {}
+        override fun onSingleTapUp(e: MotionEvent?) {
+            terminalView.requestFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                .showSoftInput(terminalView, 0)
+        }
         override fun shouldBackButtonBeMappedToEscape(): Boolean = false
         override fun shouldEnforceCharBasedInput(): Boolean = true
         override fun shouldUseCtrlSpaceWorkaround(): Boolean = false

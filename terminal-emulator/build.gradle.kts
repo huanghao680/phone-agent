@@ -17,6 +17,8 @@ android {
             ndkBuild {
                 cFlags += listOf("-std=c11", "-Wall", "-Wextra", "-Os", "-fno-stack-protector", "-Wl,--gc-sections")
                 arguments += "NDK_TOOLCHAIN_VERSION=clang"
+                // 16KB page alignment for Android 15+ (clears the compat warning)
+                arguments += "APP_LDFLAGS=-Wl,-z,max-page-size=16384"
             }
         }
     }
