@@ -68,6 +68,16 @@
             android:exported="false"
             android:label="@string/usage_title" />
 
+        <!-- Shared PTY terminal host for the TUIs chosen in TerminalPicker -->
+        <activity
+            android:name=".ZcodeTerminalActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:label="@string/zcode_label"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.PhoneAgent.Terminal" />
+
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
