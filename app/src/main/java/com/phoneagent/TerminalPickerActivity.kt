@@ -45,17 +45,6 @@ class TerminalPickerActivity : ComponentActivity() {
 
     private data class Choice(val id: String, val title: String, val desc: String, val available: Boolean)
 
-    private val choices = listOf(
-        Choice("zcode", "Zcode TUI", "Z.ai 的编码 Agent（内嵌 Node，自动安装）", true),
-        Choice("dsh", "DeepSeek Harness TUI", "DeepSeek 官方 Harness（内嵌 Node，自动安装）", true),
-        Choice(
-            "opencode",
-            "opencode TUI",
-            "官方二进制为 glibc 构建，安卓（bionic）暂不兼容",
-            false,
-        ),
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -68,6 +57,30 @@ class TerminalPickerActivity : ComponentActivity() {
     @Composable
     private fun PickerScreen() {
         var selected by remember { mutableStateOf<String?>(null) }
+        // availability depends on staged binaries; computed once per composition
+        val codexAvailable = remember { java.io.File(NodeRuntime.pkgDir(this), "codex").exists() }
+        val claudeAvailable = remember {
+            java.io.File(NodeRuntime.pkgDir(this), "claude").exists() &&
+                java.io.File(NodeRuntime.pkgDir(this), "ld-musl-aarch64.so.1").exists()
+        }
+        val choices = listOf(
+            Choice("zcode", "Zcode TUI", "Z.ai 的编码 Agent（内嵌 Node，自动安装）", true),
+            Choice("dsh", "DeepSeek Harness TUI", "DeepSeek 官方 Harness（内嵌 Node，自动安装）", true),
+            Choice(
+                "codex",
+                "Codex TUI",
+                if (codexAvailable) "OpenAI 的编码 Agent（静态 musl 二进制，安卓原生运行）"
+                else "二进制未就绪：重新打开 APP 解压运行时后再试",
+                codexAvailable,
+            ),
+            Choice(
+                "claude",
+                "Claude Code TUI",
+                if (claudeAvailable) "Anthropic 的编码 Agent（musl 二进制 + 自带 loader）"
+                else "二进制未就绪：重新打开 APP 解压运行时后再试",
+                claudeAvailable,
+            ),
+        )
         Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
             TopAppBar(title = "终端")
             LazyColumn(
@@ -142,6 +155,8 @@ class TerminalPickerActivity : ComponentActivity() {
                 "zcode", "dsh" -> startActivity(
                     Intent(this, ZcodeTerminalActivity::class.java).putExtra("agent", id)
                 )
+                "codex" -> startActivity(Intent(this, CodexTerminalActivity::class.java))
+                "claude" -> startActivity(Intent(this, ClaudeTerminalActivity::class.java))
             }
         }
     }

@@ -163,6 +163,64 @@ exec "${'$'}NODE" "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
         return write(ctx, "run-dsh-tui.sh", body)
     }
 
+    /** Interactive codex TUI bootstrap (extracts binary from assets, then exec's it). */
+    fun codexScript(ctx: Context): File {
+        val usr = NodeRuntime.usrDir(ctx).absolutePath
+        val body = """
+#!/system/bin/sh
+# Phone-Agent: launch the Codex CLI TUI (static musl binary).
+USR='$usr'
+PKG='${NodeRuntime.pkgDir(ctx).absolutePath}'
+BIN="${'$'}PKG/codex"
+
+if [ ! -x "${'$'}BIN" ]; then
+  echo "[phone-agent] codex 二进制缺失（当前构建未包含）。"
+  echo "[phone-agent] 按回车退出。"
+  read -r dummy
+  exit 1
+fi
+
+WORKDIR="${'$'}{PHONE_AGENT_WORKSPACE:-}"
+if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
+  echo "[phone-agent] 工作区：${'$'}WORKDIR"
+  cd "${'$'}WORKDIR"
+fi
+
+exec "${'$'}BIN" --dangerously-bypass-approvals-and-sandbox
+""".trim() + "\n"
+        return write(ctx, "run-codex.sh", body)
+    }
+
+    /** Interactive claude TUI bootstrap (launches via the bundled musl loader). */
+    fun claudeScript(ctx: Context): File {
+        val usr = NodeRuntime.usrDir(ctx).absolutePath
+        val body = """
+#!/system/bin/sh
+# Phone-Agent: launch Claude Code TUI via the bundled musl loader.
+USR='$usr'
+PKG='${NodeRuntime.pkgDir(ctx).absolutePath}'
+LOADER="${'$'}PKG/ld-musl-aarch64.so.1"
+BIN="${'$'}PKG/claude"
+
+if [ ! -x "${'$'}LOADER" ] || [ ! -x "${'$'}BIN" ]; then
+  echo "[phone-agent] claude 二进制缺失（当前构建未包含）。"
+  echo "[phone-agent] 按回车退出。"
+  read -r dummy
+  exit 1
+fi
+
+WORKDIR="${'$'}{PHONE_AGENT_WORKSPACE:-}"
+if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
+  echo "[phone-agent] 工作区：${'$'}WORKDIR"
+  cd "${'$'}WORKDIR"
+fi
+
+export HOME="${'$'}{HOME:-${'$'}USR/../home}"
+exec "${'$'}LOADER" "${'$'}BIN"
+""".trim() + "\n"
+        return write(ctx, "run-claude.sh", body)
+    }
+
     /** /system/bin/zcode wrapper installed by the Magisk module (root integration). */
     fun sysZcodeWrapper(): String {
         return """

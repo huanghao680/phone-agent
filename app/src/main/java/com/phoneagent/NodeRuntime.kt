@@ -99,6 +99,19 @@ object NodeRuntime {
         } catch (_: IOException) {
             // asset absent: bootstrap continues without the dsh native binding
         }
+        // codex / claude / musl-loader binaries for the terminal picker
+        // (optional until fetch-terminal-extra.sh runs in CI)
+        for (name in arrayOf("codex", "claude", "ld-musl-aarch64.so.1")) {
+            try {
+                ctx.assets.open("terminal-extra/$name").use { input ->
+                    val out = File(pkgDir(ctx), name)
+                    FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
+                    out.setExecutable(true, false)
+                }
+            } catch (_: IOException) {
+                // asset absent: picker shows the entry as unavailable
+            }
+        }
     }
 
     fun environment(ctx: Context, extra: Map<String, String> = emptyMap()): Map<String, String> {

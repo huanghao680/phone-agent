@@ -41,6 +41,9 @@ jobs:
       - name: Stage CLI packages (zcode / dsh)
         run: bash scripts/fetch-packages.sh
 
+      - name: Stage codex + claude binaries (terminal picker)
+        run: bash scripts/fetch-terminal-extra.sh
+
       - name: Build official ZCode web UI + server
         run: bash scripts/fetch-zcode-web.sh
 

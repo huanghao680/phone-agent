@@ -231,6 +231,23 @@ class SettingsActivity : ComponentActivity() {
                     }
                 }
 
+                item { GroupTitle("维护") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            UpdateRow("重建桌面快捷方式", enabled = true) {
+                                threadRun {
+                                    val lines = Shortcuts.recreateAll(this@SettingsActivity)
+                                    ui { rootLog = lines.joinToString("\n") }
+                                }
+                            }
+                            UpdateRow("用量统计", enabled = true) {
+                                startActivity(Intent(this@SettingsActivity, UsageActivity::class.java))
+                            }
+                        }
+                    }
+                }
+
                 item {
                     Spacer(Modifier.height(12.dp))
                     UpdateRow("重新初始化运行时", enabled = true) {

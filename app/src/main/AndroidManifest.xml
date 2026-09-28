@@ -81,6 +81,24 @@
             android:theme="@style/Theme.PhoneAgent.Terminal" />
 
         <activity
+            android:name=".CodexTerminalActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:label="Codex TUI"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.PhoneAgent.Terminal" />
+
+        <activity
+            android:name=".ClaudeTerminalActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:label="Claude Code TUI"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.PhoneAgent.Terminal" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_label" />
