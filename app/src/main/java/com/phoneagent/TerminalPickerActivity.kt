@@ -66,6 +66,8 @@ class TerminalPickerActivity : ComponentActivity() {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 if (NodeRuntime.isRuntimeExtracted(this@TerminalPickerActivity)) {
                     NodeRuntime.copyPackages(this@TerminalPickerActivity)
+                    BinaryAgents.ensure(this@TerminalPickerActivity, BinaryAgents.CODEX) { }
+                    BinaryAgents.ensure(this@TerminalPickerActivity, BinaryAgents.CLAUDE) { }
                 }
             }
             binReadyTick++
