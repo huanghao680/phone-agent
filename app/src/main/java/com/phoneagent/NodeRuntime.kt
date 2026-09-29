@@ -80,6 +80,42 @@ object NodeRuntime {
             }
         }
         runtimeMarker(ctx).writeText(Versions.RUNTIME)
+        pruneStaleRuntimeFiles(ctx)
+    }
+
+    /**
+     * Removes runtime files that this build no longer ships.
+     *
+     * Extraction overwrites the files it ships but never deletes ones it has
+     * stopped shipping, so a package dropped from the staging list (curl was
+     * one) stays on disk as a stale binary linked against older libraries —
+     * on Android that surfaced as "cannot locate symbol SSL_get_ex_new_index"
+     * because the linker fell back to /system/lib64/libssl.so.
+     *
+     * Only paths named by the PREVIOUS manifest are candidates, so npm-installed
+     * CLI shims in usr/bin (zcode, dsh, ...) and our own additions (bwrap,
+     * proot, landlock-wrap) are never touched.
+     */
+    private fun pruneStaleRuntimeFiles(ctx: Context) {
+        val previous = File(ctx.filesDir, ".runtime-manifest")
+        val current = try {
+            ctx.assets.open("runtime.manifest").bufferedReader().use { it.readLines().toSet() }
+        } catch (_: IOException) {
+            return // older build without a manifest: nothing to compare against
+        }
+        if (previous.exists()) {
+            previous.readLines().filter { it.isNotBlank() && it !in current }.forEach { rel ->
+                val f = File(ctx.filesDir, rel)
+                if (f.isFile) {
+                    try {
+                        Files.deleteIfExists(f.toPath())
+                    } catch (_: IOException) {
+                        // in use or read-only: leaving it is no worse than before
+                    }
+                }
+            }
+        }
+        previous.writeText(current.sorted().joinToString("\n"))
     }
 
     /** Copies the bundled CLI tarballs from APK assets to a real path npm can read. */

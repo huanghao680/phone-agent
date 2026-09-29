@@ -79,6 +79,14 @@ need tar
 # proot backs the dsh bash-sandbox shim (universal, no root); libtalloc comes
 # in through its Depends
 need proot
+# agent-facing toolchain: without these the CLIs adapt (write Node instead of
+# Python, skip git) or break outright — a stale curl used to resolve the
+# Android linker's /system/lib64/libssl.so and fail with a missing symbol
+need curl
+need jq
+need ripgrep
+need git
+need python
 
 echo "== downloading and unpacking ${#RESOLVED[@]} packages"
 for pkg in "${RESOLVED[@]}"; do
@@ -100,6 +108,17 @@ find "$STAGE/usr" -name "*.la" -delete 2>/dev/null || true
 echo "== packing runtime.tar.xz"
 tar -cJf "$ASSETS/runtime.tar.xz" -C "$STAGE" usr
 echo "$REPO nodejs-$NODE_VERSION $(date -u +%Y%m%d)" > "$ASSETS/runtime.version"
-du -h "$ASSETS/runtime.tar.xz"
 
+# Manifest of the binary directories. The app extracts over whatever is already
+# on disk, so a package dropped from this list (curl used to be one) would
+# survive as a stale binary compiled against older libraries and break at exec
+# time. The app prunes anything in bin/, libexec/ and the top level of lib/
+# that is not listed here — node_modules (npm-installed CLIs) is left alone.
+{
+  find "$STAGE/usr/bin" "$STAGE/usr/lib" -maxdepth 1 \( -type f -o -type l \) 2>/dev/null
+  find "$STAGE/usr/libexec" -maxdepth 2 \( -type f -o -type l \) 2>/dev/null
+} | sed "s|^$STAGE/||" | sort -u > "$ASSETS/runtime.manifest"
+
+du -h "$ASSETS/runtime.tar.xz"
+echo "== manifest: $(wc -l < "$ASSETS/runtime.manifest") entries"
 echo "== done: $ASSETS/runtime.tar.xz"

@@ -171,7 +171,10 @@ export async function tryLockExclusive(fd) {
 // --- 5. ripgrep shim ---------------------------------------------------------
 {
   const candidates = [
-    join(USR, '../pkg/rg'), // staged asset (static musl build from npm)
+    // Termux's own ripgrep: built for Android/bionic like the rest of the
+    // runtime, so it is the most reliable source
+    join(USR, 'bin/rg'),
+    join(USR, '../pkg/rg'), // staged static musl build (npm @vscode linux-arm64)
     join(USR, '../pkg/vendor/aarch64-unknown-linux-musl/codex-path/rg'), // codex vendor tree
   ];
   const src = candidates.find((p) => existsSync(p));
