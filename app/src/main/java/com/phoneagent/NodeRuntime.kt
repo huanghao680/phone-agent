@@ -219,6 +219,11 @@ object NodeRuntime {
             // Node's own fetch uses bundled CAs and is unaffected.
             "CURL_CA_BUNDLE" to "$usr/etc/tls/cert.pem",
             "SSL_CERT_FILE" to "$usr/etc/tls/cert.pem",
+            // git is compiled with the Termux prefix baked in, so it looks for
+            // its subcommands and templates where Termux would keep them
+            // (git-upload-pack was "No such file or directory" without this).
+            "GIT_EXEC_PATH" to "$usr/libexec/git-core",
+            "GIT_TEMPLATE_DIR" to "$usr/share/git-core/templates",
             // dsh bash sandbox mode: written by ensureSandboxTools —
             // workspace-write when a sandbox backend is staged (bwrap shim +
             // proot), otherwise danger-full-access so bash never fails closed.
