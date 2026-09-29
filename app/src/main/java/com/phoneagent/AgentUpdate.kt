@@ -135,7 +135,8 @@ object AgentUpdate {
                     sharpWasm(ctx, node, npm, usr, onLine)
                 }
                 runAndroidPatches(ctx, onLine)
-                onLine("[update] $pkg 更新完成 ✅")                true
+                onLine("[update] $pkg 更新完成 ✅")
+                true
             } else {
                 onLine("[update] $pkg 安装失败（退出码 $code），旧版本仍可用")
                 false
