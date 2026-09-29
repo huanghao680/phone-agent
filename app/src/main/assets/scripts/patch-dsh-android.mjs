@@ -19,9 +19,9 @@
 //
 // Usage: node patch-dsh-android.js <usr-prefix>
 
-import { copyFileSync, existsSync, chmodSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, chmodSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, rmSync, lstatSync, symlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 const USR = process.argv[2];
 if (!USR) {
@@ -347,6 +347,78 @@ exec "$U/bin/node" --expose-internals "$U/lib/node_modules/@deepseek-ai/dsh/lib/
     patched++;
   } else {
     console.log('[phone-agent] skip dsh launcher: bin/dsh not present');
+  }
+}
+
+// --- 9. Termux shell path compiled into git --------------------------------
+// git builds `git-upload-pack <url>` as a shell command and runs it through the
+// shell it was configured with — for these packages
+// /data/data/com.termux/files/usr/bin/sh, which cannot exist outside Termux, so
+// every clone/fetch dies with "cannot exec ... unable to fork". No environment
+// variable overrides it (SHELL and GIT_SHELL_PATH were both tried), so the
+// string is rewritten in place. The replacement is shorter, which is safe: a C
+// string ends at the first NUL, and only occurrences followed by NUL are
+// touched so neighbouring strings in .rodata stay intact.
+{
+  const OLD = '/data/data/com.termux/files/usr/bin/sh';
+  const appRoot = dirname(dirname(USR)); // /data/user/0/<pkg>
+  const NEW = `${appRoot}/bin/sh`;
+  if (Buffer.byteLength(NEW) > Buffer.byteLength(OLD)) {
+    console.log(`[phone-agent] WARN git shell path: replacement too long (${NEW})`);
+  } else {
+    // the replacement must exist for git to spawn it
+    const shim = join(appRoot, 'bin');
+    try {
+      mkdirSync(shim, { recursive: true });
+      const link = join(shim, 'sh');
+      if (!existsSync(link)) symlinkSync(join(USR, 'bin/sh'), link);
+    } catch {
+      /* already there or not creatable; the patch below still applies */
+    }
+    const targets = [];
+    const scan = (dir) => {
+      if (!existsSync(dir)) return;
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        try {
+          const st = lstatSync(p);
+          if (st.isSymbolicLink()) continue; // patching the target is enough
+          if (st.isFile() && st.size > 4096 && st.size < 64 * 1024 * 1024) targets.push(p);
+        } catch {
+          /* unreadable */
+        }
+      }
+    };
+    scan(join(USR, 'bin'));
+    scan(join(USR, 'libexec/git-core'));
+    let fixed = 0;
+    for (const p of targets) {
+      let buf;
+      try {
+        buf = readFileSync(p);
+      } catch {
+        continue;
+      }
+      const needle = Buffer.from(OLD + '\0');
+      const repl = Buffer.concat([Buffer.from(NEW + '\0'), Buffer.alloc(needle.length - NEW.length - 1)]);
+      let idx = buf.indexOf(needle);
+      if (idx === -1) continue;
+      let hits = 0;
+      while (idx !== -1) {
+        repl.copy(buf, idx);
+        hits++;
+        idx = buf.indexOf(needle, idx + needle.length);
+      }
+      try {
+        writeFileSync(p, buf);
+        fixed++;
+        console.log(`[phone-agent] git shell path: patched ${hits} occurrence(s) in ${basename(p)}`);
+      } catch {
+        console.log(`[phone-agent] WARN git shell path: cannot write ${p}`);
+      }
+    }
+    if (fixed > 0) patched += fixed;
+    else console.log('[phone-agent] git shell path: nothing to patch');
   }
 }
 
