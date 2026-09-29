@@ -20,6 +20,7 @@
 // Usage: node patch-dsh-android.js <usr-prefix>
 
 import { copyFileSync, existsSync, chmodSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const USR = process.argv[2];
@@ -170,24 +171,44 @@ export async function tryLockExclusive(fd) {
 // --- 5. ripgrep shim ---------------------------------------------------------
 {
   const candidates = [
-    join(USR, '../pkg/rg'), // staged asset, independent of codex
+    join(USR, '../pkg/rg'), // staged asset (static musl build from npm)
     join(USR, '../pkg/vendor/aarch64-unknown-linux-musl/codex-path/rg'), // codex vendor tree
   ];
   const src = candidates.find((p) => existsSync(p));
-  const dir = join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules/@vscode/ripgrep-android-arm64');
-  const bin = join(dir, 'bin/rg');
-  if (existsSync(bin)) {
-    console.log('[phone-agent] ripgrep shim: already installed');
-  } else if (src) {
+  const dirs = [
+    join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules/@vscode/ripgrep-android-arm64'),
+    // profile-hosted copies of @vscode/ripgrep resolve their platform package
+    // next to themselves, so the shim has to exist there too when not symlinked
+    join(process.env.HOME || '/data/user/0/com.phoneagent/files/home', '.dsh/profiles/node_modules/@vscode/ripgrep-android-arm64'),
+  ];
+  const works = (bin) => {
+    if (!existsSync(bin)) return false;
+    // a staged binary that cannot exec (e.g. a dynamically linked build whose
+    // loader is missing) must be replaced, not trusted by existence
+    const r = spawnSync(bin, ['--version'], { stdio: 'ignore', timeout: 10_000 });
+    return r.status === 0;
+  };
+  let installed = 0;
+  for (const dir of dirs) {
+    const bin = join(dir, 'bin/rg');
+    if (works(bin)) continue;
+    if (!src) {
+      console.log(`[phone-agent] ripgrep shim: no rg staged, cannot repair ${dir}`);
+      continue;
+    }
     mkdirSync(join(dir, 'bin'), { recursive: true });
     copyFileSync(src, bin);
     chmodSync(bin, 0o755);
     writeFileSync(join(dir, 'package.json'), '{"name":"@vscode/ripgrep-android-arm64","version":"1.18.0","main":"bin/rg"}\n');
-    console.log(`[phone-agent] ripgrep shim: installed from ${src}`);
-    patched++;
-  } else {
-    console.log('[phone-agent] skip ripgrep shim: no rg binary staged');
+    installed++;
+    // verify what we just installed: a corrupted or wrong-flavour binary must
+    // be reported here, not discovered later as "ripgrep launch failed"
+    console.log(works(bin)
+      ? `[phone-agent] ripgrep shim: installed into ${dir}`
+      : `[phone-agent] WARN ripgrep shim: installed but NOT runnable in ${dir} (bad staged binary?)`);
   }
+  if (installed > 0) patched += installed;
+  else if (dirs.every((d) => works(join(d, 'bin/rg')))) console.log('[phone-agent] ripgrep shim: OK');
 }
 
 // --- 6. shebang prefix rewrite ----------------------------------------------

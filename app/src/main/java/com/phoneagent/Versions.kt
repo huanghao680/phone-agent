@@ -11,6 +11,8 @@ object Versions {
     const val ZCODE_UPSTREAM_REF = "v3.14.3"
     const val CODEX_VERSION = "0.157.1"
     const val CLAUDE_VERSION = "2.1.283"
+    /** Static musl ripgrep that backs dsh's glob/grep on Android. */
+    const val RIPGREP_VERSION = "1.18.0"
 
     const val ZCODE_TGZ = "zcode-app-cli-$ZCODE.tgz"
     const val DSH_TGZ = "deepseek-ai-dsh-$DSH.tgz"

@@ -33,25 +33,23 @@ tar -xzf "$WORK/musl.apk" -C "$WORK/musl" 2>/dev/null || true
 cp "$WORK/musl/lib/ld-musl-aarch64.so.1" "$ASSETS/ld-musl-aarch64.so.1"
 chmod 755 "$ASSETS/ld-musl-aarch64.so.1"
 
-# version manifest the app reads for update checks
-echo "{\"codex\":\"$CODEX_VERSION\",\"claude\":\"$CLAUDE_VERSION\"}" > "$ASSETS/versions.json"
+# Static musl ripgrep for dsh's glob/grep. Node on Android reports platform
+# "android", for which @vscode/ripgrep has no package, so the binary is staged
+# behind the platform name its resolver looks for. The linux-arm64 build is
+# statically linked and runs as-is on bionic; codex's bundled rg is dynamically
+# linked and fails with ENOENT on its loader, so it must not be used here.
+echo "== ripgrep $RIPGREP_VERSION (@vscode/ripgrep-linux-arm64, static)"
+RG_META=$(curl -fsSL "https://registry.npmjs.org/@vscode/ripgrep-linux-arm64/$RIPGREP_VERSION")
+RG_TARBALL=$(echo "$RG_META" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).dist.tarball))")
+curl -fsSL "$RG_TARBALL" -o "$WORK/rg.tgz"
+mkdir -p "$WORK/rgx"
+tar -xzf "$WORK/rg.tgz" -C "$WORK/rgx"
+cp "$WORK/rgx/package/bin/rg" "$ASSETS/rg"
+chmod 755 "$ASSETS/rg"
+echo "== ripgrep staged ($(du -h "$ASSETS/rg" | cut -f1))"
 
-# Static musl ripgrep, lifted out of the codex tarball: Node on Android reports
-# platform "android", for which @vscode/ripgrep has no package, so dsh's
-# glob/grep need this binary behind the platform name it looks for. Staged
-# separately so the shim no longer depends on codex having been extracted.
-mkdir -p "$WORK/rg"
-tar -xzf "$ASSETS/codex.tgz" -C "$WORK/rg" \
-  vendor/aarch64-unknown-linux-musl/codex-path/rg 2>/dev/null \
-  || tar -xzf "$ASSETS/codex.tgz" -C "$WORK/rg" --wildcards '*/rg' 2>/dev/null || true
-RG="$(find "$WORK/rg" -type f -name rg | head -1)"
-if [ -n "$RG" ]; then
-  cp "$RG" "$ASSETS/rg"
-  chmod 755 "$ASSETS/rg"
-  echo "== ripgrep staged ($(du -h "$ASSETS/rg" | cut -f1))"
-else
-  echo "!! ripgrep not found inside codex.tgz" >&2
-fi
+# version manifest the app reads for update checks
+echo "{\"codex\":\"$CODEX_VERSION\",\"claude\":\"$CLAUDE_VERSION\",\"ripgrep\":\"$RIPGREP_VERSION\"}" > "$ASSETS/versions.json"
 
 ls -la "$ASSETS"
 echo "== done"
