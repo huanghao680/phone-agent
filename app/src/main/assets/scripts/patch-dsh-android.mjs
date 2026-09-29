@@ -19,7 +19,7 @@
 //
 // Usage: node patch-dsh-android.js <usr-prefix>
 
-import { copyFileSync, existsSync, chmodSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, chmodSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const USR = process.argv[2];
@@ -28,11 +28,12 @@ if (!USR) {
   process.exit(2);
 }
 
-const DSH_MOD = join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai');
-const dshPkg = (name) => join(DSH_MOD, name);
-// npm may hoist a dependency next to dsh instead of nesting it
+const DSH_NM = join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules');
+const DSH_MOD = join(DSH_NM, '@deepseek-ai');
+// npm may hoist a dependency into any of these trees, and not every dsh
+// dependency is scoped, so search every plausible node_modules root
 const resolvePkgDir = (name) => {
-  for (const base of [DSH_MOD, join(USR, 'lib/node_modules/@deepseek-ai')]) {
+  for (const base of [DSH_MOD, DSH_NM, join(USR, 'lib/node_modules/@deepseek-ai'), join(USR, 'lib/node_modules')]) {
     const dir = join(base, name);
     if (existsSync(dir)) return dir;
   }
@@ -245,6 +246,84 @@ export async function tryLockExclusive(fd) {
   }
   console.log(`[phone-agent] shebangs: rewrote ${count} file(s) to the app prefix`);
   patched += count > 0 ? 1 : 0;
+}
+
+// --- 7. require-builtin: JS fallback -----------------------------------------
+// 0.1.7 added node-addon-require-builtin, a native addon that forwards ids to
+// Node's builtin require. No android build exists on npm, and its published
+// form carries no sources to compile. The addon's whole job — per its own
+// README — is `require(id)` plus `isAllowedInternalId() === true`, so a JS
+// equivalent works as long as Node runs with --expose-internals (which the
+// bin/dsh wrapper below guarantees).
+{
+  const dir = resolvePkgDir('node-addon-require-builtin');
+  const file = dir && join(dir, 'lib/index.js');
+  if (file && existsSync(file)) {
+    const stub = `"use strict";
+// PHONE_AGENT_ANDROID_STUB
+// JS fallback for the missing android build; requires --expose-internals.
+function requireBuiltin(moduleId) {
+  return require(moduleId);
+}
+function isAllowedInternalId() {
+  return true;
+}
+function getBindingInfo() {
+  return {
+    name: "node-addon-require-builtin",
+    variant: "js-fallback",
+    target: process.platform + "-" + process.arch,
+  };
+}
+const api = { requireBuiltin, isAllowedInternalId, getBindingInfo };
+module.exports = { ...api, default: api };
+`;
+    if (readFileSync(file, 'utf8').includes('PHONE_AGENT_ANDROID_STUB')) {
+      console.log('[phone-agent] require-builtin: already patched');
+    } else {
+      writeFileSync(file, stub);
+      console.log('[phone-agent] require-builtin: patched (JS fallback)');
+      patched++;
+    }
+  } else {
+    console.log('[phone-agent] skip require-builtin: not present');
+  }
+}
+
+// --- 8. dsh launcher: force --expose-internals -------------------------------
+// NODE_OPTIONS rejects the flag, so the wrapper is the only place that reaches
+// every entry point (TUI, web, headless, subagents, user shells).
+{
+  const bin = join(USR, 'bin/dsh');
+  const wrapper = `#!/system/bin/sh
+# PHONE_AGENT_DSH_WRAPPER
+# --expose-internals is required by the JS fallbacks for dsh's native addons
+# (node-addon-require-builtin) and cannot be set through NODE_OPTIONS.
+U="${USR}"
+export LD_LIBRARY_PATH="$U/lib"
+exec "$U/bin/node" --expose-internals "$U/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" "$@"
+`;
+  let current = null;
+  try {
+    current = readFileSync(bin, 'utf8');
+  } catch {
+    /* missing or a symlink to the real entry: replace it */
+  }
+  if (current && current.includes('PHONE_AGENT_DSH_WRAPPER')) {
+    console.log('[phone-agent] dsh launcher: already wrapped');
+  } else if (existsSync(bin) || current !== null) {
+    try {
+      rmSync(bin, { force: true });
+    } catch {
+      /* ignore */
+    }
+    writeFileSync(bin, wrapper);
+    chmodSync(bin, 0o755);
+    console.log('[phone-agent] dsh launcher: wrapped (--expose-internals)');
+    patched++;
+  } else {
+    console.log('[phone-agent] skip dsh launcher: bin/dsh not present');
+  }
 }
 
 console.log(`[phone-agent] dsh android patch done (${patched} change(s), ${warned} warning(s))`);

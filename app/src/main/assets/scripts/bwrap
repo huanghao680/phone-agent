@@ -101,6 +101,12 @@ for _d in system vendor product apex odm system_ext linkerconfig; do
 done
 set -A PFX "${PFX[@]}" -b /dev:/dev -b /proc:/proc -b /sys:/sys
 mkdir -p "$SKEL/dev" "$SKEL/proc" "$SKEL/sys" 2>/dev/null || true
+# the spawning process's cwd must exist in the guest tree, or proot gives up on
+# it and silently falls back to "/" (making relative paths resolve wrongly)
+CWD=$(pwd 2>/dev/null || echo "")
+if [ -n "$CWD" ] && [ "$CWD" != "/" ]; then
+	mkdir -p "$SKEL$CWD" 2>/dev/null || true
+fi
 # the runtime prefix at its real path (node/bash/agents live here)
 set -A PFX "${PFX[@]}" -b "$USR:$USR"
 mkdir -p "$SKEL$USR" 2>/dev/null || true
@@ -115,6 +121,17 @@ if [ "$MODE" = ws ] && [ -n "$WS" ]; then
 	mkdir -p "$WS" 2>/dev/null || true
 	set -A PFX "${PFX[@]}" -b "$WS:$WS"
 	mkdir -p "$SKEL$WS" 2>/dev/null || true
+fi
+# Freeze the skeleton itself: a write to an unbound path can only land in the
+# ephemeral skeleton, where it would silently "succeed" and vanish. Freezing
+# turns that into a real EACCES denial the agent can see (and dsh classifies
+# it as a policy denial). The allowed mount points keep their write bit — proot
+# resolves through them.
+chmod -R a-w "$SKEL" 2>/dev/null || true
+chmod 755 "$SKEL/tmp" 2>/dev/null || true
+[ -n "$TMPDIR" ] && chmod 755 "$SKEL$TMPDIR" 2>/dev/null
+if [ "$MODE" = ws ] && [ -n "$WS" ]; then
+	chmod 755 "$SKEL$WS" 2>/dev/null || true
 fi
 # $HOME outside the visible tree would break tools that touch it; remap it
 # into the temp dir (read of the real home is not promised in either mode)
@@ -133,4 +150,11 @@ if [ -z "$HOME" ] || [ "$REMAP_HOME" = 1 ]; then
 	export HOME
 fi
 
-exec "${PFX[@]}" "$@"
+# Run proot as a child rather than exec'ing it: the skeleton must be thawed and
+# removed afterwards, which an exec'd process can never do (that is how the
+# frozen roots used to pile up in TMPDIR).
+"${PFX[@]}" "$@"
+RC=$?
+chmod -R u+w "$SKEL" 2>/dev/null
+rm -rf "$SKEL" 2>/dev/null
+exit $RC

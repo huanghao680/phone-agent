@@ -15,8 +15,8 @@ android {
         // storage when targetSdk >= 29 (W^X), and the embedded Node runtime must be
         // executable from filesDir. Same tradeoff Termux makes. Not distributed via Play.
         targetSdk = 28
-        versionCode = 31
-        versionName = "0.7.14"
+        versionCode = 32
+        versionName = "0.7.15"
         ndk {
             abiFilters += "arm64-v8a"
         }
