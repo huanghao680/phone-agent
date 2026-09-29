@@ -30,11 +30,7 @@ class DshActivity : ComponentActivity() {
         errorText = findViewById(R.id.error_text)
         findViewById<Button>(R.id.retry).setOnClickListener { connect() }
 
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        // fill the landscape viewport (the web app centers at a phone width)
-        webView.settings.useWideViewPort = true
-        webView.settings.loadWithOverviewMode = true
+        webView.applyWebUiSettings()
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, req: WebResourceRequest?, err: WebResourceError?) {
                 if (req?.isForMainFrame == true) {
@@ -44,7 +40,7 @@ class DshActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                view?.evaluateJavascript(
+                view?.evaluateJavascript(WEBVIEW_PATCH_JS +
                     """
                     (function(){
                       var s=document.createElement('style');

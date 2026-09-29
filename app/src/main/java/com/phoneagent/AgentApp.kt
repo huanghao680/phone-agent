@@ -1,6 +1,7 @@
 package com.phoneagent
 
 import android.app.Application
+import android.webkit.WebView
 import com.topjohnwu.superuser.Shell
 
 class AgentApp : Application() {
@@ -11,5 +12,9 @@ class AgentApp : Application() {
                 .setFlags(Shell.FLAG_MOUNT_MASTER)
                 .setTimeout(15)
         )
+        // chrome://inspect over adb for the webUI WebViews; debug builds only
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
     }
 }

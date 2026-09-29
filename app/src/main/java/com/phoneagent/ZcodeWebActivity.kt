@@ -28,16 +28,11 @@ class ZcodeWebActivity : ComponentActivity() {
         errorText = findViewById(R.id.error_text)
         findViewById<Button>(R.id.retry).setOnClickListener { connect() }
 
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        // make the SPA fill the landscape viewport: the web app centers itself
-        // at a phone-ish max-width, which leaves big black bars on wide screens
-        webView.settings.useWideViewPort = true
-        webView.settings.loadWithOverviewMode = true
+        webView.applyWebUiSettings()
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                view?.evaluateJavascript(
+                view?.evaluateJavascript(WEBVIEW_PATCH_JS +
                     """
                     (function(){
                       var s=document.createElement('style');
