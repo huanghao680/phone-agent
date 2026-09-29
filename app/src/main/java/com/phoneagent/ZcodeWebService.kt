@@ -46,6 +46,12 @@ class ZcodeWebService : Service() {
                 notify("正在解压 Node 运行时…")
                 NodeRuntime.extractRuntime(this)
             }
+            // the web server drives the zcode CLI as its agent backend, so the
+            // CLI must be present at the packaged version
+            if (Bootstrap.zcodeNeedsInstall(this)) {
+                notify("正在安装 zcode 组件（首次需联网）…")
+                Bootstrap.install(this) { line -> appendLog(line) }
+            }
             extractBundles()
             val srvDir = File(filesDir, "zcode-server")
             val entry = File(srvDir, "dist/entry-http.js")

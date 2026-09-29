@@ -135,8 +135,7 @@ object AgentUpdate {
                     sharpWasm(ctx, node, npm, usr, onLine)
                 }
                 runAndroidPatches(ctx, onLine)
-                onLine("[update] $pkg 更新完成 ✅")
-                true
+                onLine("[update] $pkg 更新完成 ✅")                true
             } else {
                 onLine("[update] $pkg 安装失败（退出码 $code），旧版本仍可用")
                 false
@@ -160,23 +159,8 @@ object AgentUpdate {
      * replaces the package files, so without this the flock stub, the link()
      * fallback, the sandbox platform chain and the ripgrep shim are all lost.
      */
-    private fun runAndroidPatches(ctx: Context, onLine: (String) -> Unit) {
-        val script = File(NodeRuntime.usrDir(ctx), "share/phone-agent/patch-dsh-flock.sh")
-        if (!script.exists()) {
-            onLine("[update] 未找到补丁脚本，跳过 Android 适配")
-            return
-        }
-        try {
-            val pb = ProcessBuilder("/system/bin/sh", script.absolutePath)
-            pb.environment().putAll(NodeRuntime.environment(ctx))
-            pb.redirectErrorStream(true)
-            val p = pb.start()
-            p.inputStream.bufferedReader().forEachLine(onLine)
-            if (p.waitFor() != 0) onLine("[update] 补丁脚本返回非零（部分适配可能未生效）")
-        } catch (e: Exception) {
-            onLine("[update] 补丁脚本执行异常：${e.message}")
-        }
-    }
+    private fun runAndroidPatches(ctx: Context, onLine: (String) -> Unit) =
+        Bootstrap.applyAndroidPatches(ctx, onLine)
 
     private fun injectPty(ctx: Context, onLine: (String) -> Unit) {
         val src = File(NodeRuntime.pkgDir(ctx), "node-pty-prebuild/pty.node")

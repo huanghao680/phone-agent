@@ -17,6 +17,17 @@ object Bootstrap {
     fun isZcodeInstalled(ctx: Context): Boolean = NodeRuntime.isZcodeInstalled(ctx)
     fun isDshInstalled(ctx: Context): Boolean = NodeRuntime.isDshInstalled(ctx)
 
+    /**
+     * True when the packaged CLI version differs from what is on disk — the
+     * entry file merely existing is not enough, or a version bump shipped in a
+     * new APK would never reach an already-installed device.
+     */
+    fun zcodeNeedsInstall(ctx: Context): Boolean =
+        installedVersion(File(NodeRuntime.usrDir(ctx), tgzToNodeModulesPath(Versions.ZCODE_TGZ))) != Versions.ZCODE
+
+    fun dshNeedsInstall(ctx: Context): Boolean =
+        installedVersion(File(NodeRuntime.usrDir(ctx), tgzToNodeModulesPath(Versions.DSH_TGZ))) != Versions.DSH
+
     /** Blocking; call from a worker thread. Streams npm output lines to [onLine]. */
     fun install(ctx: Context, onLine: (String) -> Unit): Boolean {
         NodeRuntime.copyPackages(ctx)
@@ -35,8 +46,34 @@ object Bootstrap {
         if (dshOk) {
             injectPtyPrebuild(ctx, onLine)
             installSharpWasm(ctx, node, npm, usr, onLine)
+            // the freshly unpacked dsh tree has none of the Android fixes
+            applyAndroidPatches(ctx, onLine)
         }
         return dshOk // the dsh service only needs dsh; zcode is for the terminal
+    }
+
+    /**
+     * Runs the Android compatibility patcher over the installed tree: flock
+     * stub, link() fallback, sandbox platform chain, attachment fsync
+     * tolerance, ripgrep shim and shebang prefixes. Every (re)install replaces
+     * those files, so this runs after each install and self-update.
+     */
+    fun applyAndroidPatches(ctx: Context, onLine: (String) -> Unit) {
+        val script = File(NodeRuntime.usrDir(ctx), "share/phone-agent/patch-dsh-flock.sh")
+        if (!script.exists()) {
+            onLine("[phone-agent] 未找到补丁脚本，跳过 Android 适配")
+            return
+        }
+        try {
+            val pb = ProcessBuilder("/system/bin/sh", script.absolutePath)
+            pb.environment().putAll(NodeRuntime.environment(ctx))
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            p.inputStream.bufferedReader().forEachLine(onLine)
+            if (p.waitFor() != 0) onLine("[phone-agent] 补丁脚本返回非零（部分适配可能未生效）")
+        } catch (e: Exception) {
+            onLine("[phone-agent] 补丁脚本执行异常：${e.message}")
+        }
     }
 
     private fun marker(ctx: Context, name: String): File =

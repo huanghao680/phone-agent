@@ -57,7 +57,7 @@ class DshService : Service() {
             // danger-full-access, but headless/CLI profiles spawned from
             // sessions inherit this runtime and need the sandbox staged
             NodeRuntime.ensureSandboxTools(this)
-            if (!Bootstrap.isDshInstalled(this)) {
+            if (Bootstrap.dshNeedsInstall(this)) {
                 notify("正在安装 zcode / dsh 组件（首次需联网）…")
                 val ok = Bootstrap.install(this) { line -> appendLog(line) }
                 if (!ok) {
@@ -66,6 +66,9 @@ class DshService : Service() {
                     return
                 }
             }
+            // the package tree may have just been replaced: re-stage the shim
+            // and rewrite the sandbox-mode file for the new version
+            NodeRuntime.ensureSandboxTools(this)
             // dsh uses the invoking directory as its workspace root
             val workDir = File(
                 StorageAccess.defaultWorkspace(this),
