@@ -6,8 +6,8 @@ package com.phoneagent
  */
 object Versions {
     const val RUNTIME = "node-26.4.0-2"
-    const val ZCODE = "3.14.3-28"
-    const val DSH = "0.1.5-rc.3"
+    const val ZCODE = "3.14.4-29"
+    const val DSH = "0.1.7-rc.2"
     const val ZCODE_UPSTREAM_REF = "v3.14.3"
     const val CODEX_VERSION = "0.157.1"
     const val CLAUDE_VERSION = "2.1.283"

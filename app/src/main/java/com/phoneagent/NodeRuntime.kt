@@ -100,18 +100,22 @@ object NodeRuntime {
         } catch (_: IOException) {
             // asset absent: bootstrap continues without the dsh native binding
         }
-        // dsh flock patch script for Android
-        try {
-            ctx.assets.open("scripts/patch-dsh-flock.sh").use { input ->
-                val dir = File(usrDir(ctx), "share/phone-agent").apply { mkdirs() }
-                FileOutputStream(File(dir, "patch-dsh-flock.sh")).use { input.copyTo(it, 1 shl 16) }
+        // dsh Android patch entry point + its Node-based patcher
+        for (name in arrayOf("patch-dsh-flock.sh", "patch-dsh-android.mjs")) {
+            try {
+                ctx.assets.open("scripts/$name").use { input ->
+                    val dir = File(usrDir(ctx), "share/phone-agent").apply { mkdirs() }
+                    val out = File(dir, name)
+                    FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
+                    out.setExecutable(true, false)
+                }
+            } catch (_: IOException) {
+                // asset absent: matching dsh patch skipped
             }
-        } catch (_: IOException) {
-            // asset absent: dsh flock patch skipped
         }
         // codex / claude npm platform tarballs + musl loader for the terminal
         // picker (optional until fetch-terminal-extra.sh runs in CI)
-        for (name in arrayOf("codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json")) {
+        for (name in arrayOf("codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json", "rg")) {
             try {
                 ctx.assets.open("terminal-extra/$name").use { input ->
                     val out = File(pkgDir(ctx), name)

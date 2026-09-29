@@ -28,9 +28,9 @@ object Bootstrap {
             return false
         }
 
-        val zcodeOk = npmInstall(ctx, node, npm, usr, Versions.ZCODE_TGZ, ignoreScripts = false, onLine = onLine)
+        val zcodeOk = npmInstall(ctx, node, npm, usr, Versions.ZCODE_TGZ, Versions.ZCODE, ignoreScripts = false, onLine = onLine)
         if (zcodeOk) marker(ctx, "zcode").writeText("ok")
-        val dshOk = npmInstall(ctx, node, npm, usr, Versions.DSH_TGZ, ignoreScripts = true, onLine = onLine)
+        val dshOk = npmInstall(ctx, node, npm, usr, Versions.DSH_TGZ, Versions.DSH, ignoreScripts = true, onLine = onLine)
         if (dshOk) marker(ctx, "dsh").writeText("ok")
         if (dshOk) {
             injectPtyPrebuild(ctx, onLine)
@@ -48,10 +48,17 @@ object Bootstrap {
         npm: File,
         usr: File,
         tgz: String,
+        wantVersion: String,
         ignoreScripts: Boolean,
         onLine: (String) -> Unit,
     ): Boolean {
-        if (File(usr, tgzToNodeModulesPath(tgz)).exists()) return true
+        val manifest = File(usr, tgzToNodeModulesPath(tgz))
+        // Reinstall when the staged tarball is newer than what is on disk: the
+        // entry file existing is not enough, or a packaged version bump would
+        // never reach an already-installed device.
+        val installed = if (manifest.exists()) installedVersion(manifest) else null
+        if (installed == wantVersion) return true
+        if (installed != null) onLine("[phone-agent] 组件更新 $installed -> $wantVersion（$tgz）")
         val args = mutableListOf(
             node.absolutePath, npm.absolutePath,
             "install", "-g", "--prefix", usr.absolutePath,
@@ -76,6 +83,13 @@ object Bootstrap {
     private fun tgzToNodeModulesPath(tgz: String): String = when (tgz) {
         Versions.ZCODE_TGZ -> "lib/node_modules/zcode-app-cli/package.json"
         else -> "lib/node_modules/@deepseek-ai/dsh/package.json"
+    }
+
+    /** Reads the "version" field from an installed package's package.json. */
+    private fun installedVersion(manifest: File): String? = try {
+        org.json.JSONObject(manifest.readText()).optString("version").ifEmpty { null }
+    } catch (_: Exception) {
+        null
     }
 
     /** Copies the CI-built android-arm64 pty.node into dsh's node-pty prebuilds dir. */

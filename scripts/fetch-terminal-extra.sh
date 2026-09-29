@@ -36,5 +36,22 @@ chmod 755 "$ASSETS/ld-musl-aarch64.so.1"
 # version manifest the app reads for update checks
 echo "{\"codex\":\"$CODEX_VERSION\",\"claude\":\"$CLAUDE_VERSION\"}" > "$ASSETS/versions.json"
 
+# Static musl ripgrep, lifted out of the codex tarball: Node on Android reports
+# platform "android", for which @vscode/ripgrep has no package, so dsh's
+# glob/grep need this binary behind the platform name it looks for. Staged
+# separately so the shim no longer depends on codex having been extracted.
+mkdir -p "$WORK/rg"
+tar -xzf "$ASSETS/codex.tgz" -C "$WORK/rg" \
+  vendor/aarch64-unknown-linux-musl/codex-path/rg 2>/dev/null \
+  || tar -xzf "$ASSETS/codex.tgz" -C "$WORK/rg" --wildcards '*/rg' 2>/dev/null || true
+RG="$(find "$WORK/rg" -type f -name rg | head -1)"
+if [ -n "$RG" ]; then
+  cp "$RG" "$ASSETS/rg"
+  chmod 755 "$ASSETS/rg"
+  echo "== ripgrep staged ($(du -h "$ASSETS/rg" | cut -f1))"
+else
+  echo "!! ripgrep not found inside codex.tgz" >&2
+fi
+
 ls -la "$ASSETS"
 echo "== done"

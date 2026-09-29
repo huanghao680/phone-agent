@@ -1,0 +1,251 @@
+// Android compatibility patcher for the dsh package tree (run by
+// patch-dsh-flock.sh after every install/update).
+//
+// Upstream dsh assumes glibc Linux; on Android/bionic six things break. Each
+// patch is anchored on an exact source string and guarded by a marker, so
+// re-running is a no-op and an upstream rewrite produces a WARNING rather
+// than a silently corrupted file.
+//
+//   1. flock           node-addon-system ships no android build        -> stub
+//   2. link()          SELinux denies link(2) for app data on 11+      -> rename
+//   3. PLATFORM_CHAINS sandbox-local has no android entry (empty chain,
+//                      bash fails closed without even probing)         -> add
+//   4. syncDirectory   Android ancestors are traversable-but-unreadable,
+//                      so open(O_RDONLY) on them throws EACCES and the
+//                      whole attachment save fails                    -> tolerate
+//   5. ripgrep         @vscode/ripgrep resolves a platform package that
+//                      does not exist on npm (platform "android")     -> shim
+//   6. shebangs        scripts carry the Termux prefix baked in         -> rewrite
+//
+// Usage: node patch-dsh-android.js <usr-prefix>
+
+import { copyFileSync, existsSync, chmodSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const USR = process.argv[2];
+if (!USR) {
+  console.error('[phone-agent] patch-dsh-android: missing usr prefix');
+  process.exit(2);
+}
+
+const DSH_MOD = join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai');
+const dshPkg = (name) => join(DSH_MOD, name);
+// npm may hoist a dependency next to dsh instead of nesting it
+const resolvePkgDir = (name) => {
+  for (const base of [DSH_MOD, join(USR, 'lib/node_modules/@deepseek-ai')]) {
+    const dir = join(base, name);
+    if (existsSync(dir)) return dir;
+  }
+  return null;
+};
+
+let patched = 0;
+let warned = 0;
+
+function patchFile(file, { marker, apply, label }) {
+  if (!existsSync(file)) {
+    console.log(`[phone-agent] skip ${label}: file not present`);
+    return;
+  }
+  const src = readFileSync(file, 'utf8');
+  if (src.includes(marker)) {
+    console.log(`[phone-agent] ${label}: already patched`);
+    return;
+  }
+  const out = apply(src);
+  if (out === null || out === undefined) {
+    console.log(`[phone-agent] WARN ${label}: anchor not found (upstream changed?)`);
+    warned++;
+    return;
+  }
+  writeFileSync(file, out);
+  console.log(`[phone-agent] ${label}: patched`);
+  patched++;
+}
+
+// --- 1. flock: stub the native binding ---------------------------------------
+{
+  const dir = resolvePkgDir('node-addon-system');
+  const file = dir && join(dir, 'lib/flock.js');
+  if (file && existsSync(file)) {
+    const stub = `// PHONE_AGENT_ANDROID_STUB
+// Android has no prebuilt @deepseek-ai/node-addon-system binding; the stock
+// module throws ERR_FLOCK_UNSUPPORTED_PLATFORM. Session-log writes are already
+// serialized by this app's single Node process, so acquisition is a no-op.
+export async function tryLockExclusive(fd) {
+  void fd
+  return
+}
+`;
+    if (readFileSync(file, 'utf8').includes('PHONE_AGENT_ANDROID_STUB')) {
+      console.log('[phone-agent] flock: already patched');
+    } else {
+      writeFileSync(file, stub);
+      console.log('[phone-agent] flock: patched (no-op stub)');
+      patched++;
+    }
+  } else {
+    console.log('[phone-agent] skip flock: node-addon-system not present');
+  }
+}
+
+// --- 2. session persistence: link() -> rename() fallback ---------------------
+{
+  const dir = resolvePkgDir('dsh-session-persistence-jsonl');
+  const file = dir && join(dir, 'lib/index.js');
+  patchFile(file, {
+    marker: 'PHONE_AGENT_ANDROID_LINK_PATCH',
+    label: 'session persistence (link -> rename)',
+    apply: (src) => {
+      const importRe = /^import \{ link, ([^}]*)\} from "node:fs\/promises";$/m;
+      const m = src.match(importRe);
+      if (!m) return null;
+      const names = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+      if (!names.includes('rename')) names.push('rename');
+      const wrapper = [
+        `import { link as linkNative, ${names.join(', ')} } from "node:fs/promises";`,
+        'const link = async (f, t) => {',
+        '  try {',
+        '    await linkNative(f, t)',
+        '  } catch (e) {',
+        '    if (e && (e.code === "EACCES" || e.code === "EPERM" || e.code === "EMLINK" || e.code === "EXDEV")) {',
+        '      await rename(f, t)',
+        '    } else {',
+        '      throw e',
+        '    }',
+        '  }',
+        '};',
+        '// PHONE_AGENT_ANDROID_LINK_PATCH',
+      ].join('\n');
+      return src.replace(importRe, wrapper);
+    },
+  });
+}
+
+// --- 3. sandbox-local: android runner chain ----------------------------------
+{
+  const dir = resolvePkgDir('dsh-sandbox-local');
+  const file = dir && join(dir, 'lib/index.js');
+  patchFile(file, {
+    marker: 'PHONE_AGENT_ANDROID_CHAIN',
+    label: 'sandbox platform chain (android)',
+    apply: (src) => {
+      // Two elements on purpose: a single-element chain is trusted WITHOUT a
+      // probe, so a missing or broken shim would look like working sandboxing.
+      const re = /(const PLATFORM_CHAINS = \{\n)(\tlinux: \["bwrap", "landlock"\],\n)/;
+      if (!re.test(src)) return null;
+      return src.replace(re, (m, head, linux) => `${head}${linux}\tandroid: ["bwrap", "landlock"], // PHONE_AGENT_ANDROID_CHAIN\n`);
+    },
+  });
+}
+
+// --- 4. attachment-local: tolerate unreadable ancestors ----------------------
+{
+  const dir = resolvePkgDir('dsh-attachment-local');
+  const file = dir && join(dir, 'lib/index.js');
+  patchFile(file, {
+    marker: 'PHONE_AGENT_ANDROID_EACCES',
+    label: 'attachment dir fsync (EACCES tolerance)',
+    apply: (src) => {
+      const anchor = '\tconst handle = await open(path, constants.O_RDONLY);';
+      if (!src.includes(anchor)) return null;
+      // App-private dirs sit under /data/user/0, which is traversable but not
+      // readable (x without r) — open(O_RDONLY) on it is EACCES. Durability of
+      // those platform-owned levels is not ours to assert, so skip them
+      // instead of failing the whole attachment save.
+      const replacement =
+        '\tlet handle;\n' +
+        '\ttry {\n' +
+        '\t\thandle = await open(path, constants.O_RDONLY);\n' +
+        '\t} catch (error) {\n' +
+        '\t\tif (error?.code === "EACCES" || error?.code === "EPERM") return; /* PHONE_AGENT_ANDROID_EACCES */\n' +
+        '\t\tthrow error;\n' +
+        '\t}';
+      return src.replace(anchor, replacement);
+    },
+  });
+}
+
+// --- 5. ripgrep shim ---------------------------------------------------------
+{
+  const candidates = [
+    join(USR, '../pkg/rg'), // staged asset, independent of codex
+    join(USR, '../pkg/vendor/aarch64-unknown-linux-musl/codex-path/rg'), // codex vendor tree
+  ];
+  const src = candidates.find((p) => existsSync(p));
+  const dir = join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules/@vscode/ripgrep-android-arm64');
+  const bin = join(dir, 'bin/rg');
+  if (existsSync(bin)) {
+    console.log('[phone-agent] ripgrep shim: already installed');
+  } else if (src) {
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    copyFileSync(src, bin);
+    chmodSync(bin, 0o755);
+    writeFileSync(join(dir, 'package.json'), '{"name":"@vscode/ripgrep-android-arm64","version":"1.18.0","main":"bin/rg"}\n');
+    console.log(`[phone-agent] ripgrep shim: installed from ${src}`);
+    patched++;
+  } else {
+    console.log('[phone-agent] skip ripgrep shim: no rg binary staged');
+  }
+}
+
+// --- 6. shebang prefix rewrite ----------------------------------------------
+{
+  const OLD = '/data/data/com.termux/files/usr';
+  const ENV_OLD = '#!/usr/bin/env '; // Android has no /usr/bin/env
+  let count = 0;
+  const rewrite = (file) => {
+    let head;
+    try {
+      head = readFileSync(file, 'utf8').slice(0, 4096);
+    } catch {
+      return;
+    }
+    if (!head.includes(OLD) && !head.startsWith(ENV_OLD)) return;
+    try {
+      if (statSync(file).size > 2_000_000) return; // skip big data files
+      let text = readFileSync(file, 'utf8');
+      if (text.includes('\0')) return; // binary
+      const before = text;
+      if (text.startsWith(ENV_OLD)) text = `#!${USR}/bin/env ` + text.slice(ENV_OLD.length);
+      text = text.split(OLD).join(USR);
+      if (text !== before) {
+        writeFileSync(file, text);
+        count++;
+      }
+    } catch {
+      /* unreadable/undeletable: leave it */
+    }
+  };
+  const targets = [join(USR, 'bin')];
+  try {
+    for (const name of readdirSync(join(USR, 'lib/node_modules'))) {
+      targets.push(join(USR, 'lib/node_modules', name, 'bin'));
+      targets.push(join(USR, 'lib/node_modules', name, 'libexec'));
+    }
+  } catch {
+    /* no node_modules yet */
+  }
+  for (const dir of targets) {
+    if (!existsSync(dir)) continue;
+    let names;
+    try {
+      names = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const p = join(dir, name);
+      try {
+        if (statSync(p).isFile()) rewrite(p);
+      } catch {
+        /* dangling symlink */
+      }
+    }
+  }
+  console.log(`[phone-agent] shebangs: rewrote ${count} file(s) to the app prefix`);
+  patched += count > 0 ? 1 : 0;
+}
+
+console.log(`[phone-agent] dsh android patch done (${patched} change(s), ${warned} warning(s))`);
+if (warned > 0) process.exitCode = 1;

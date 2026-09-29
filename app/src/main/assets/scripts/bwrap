@@ -22,7 +22,21 @@
 # instead of a command failure. A non-zero exit from the COMMAND itself is a
 # normal command result and is propagated untouched.
 
-SELFDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# Locate ourselves: libuv's execvp passes argv[0] as the BARE name ("bwrap")
+# while shells pass a path — resolve through PATH when there is no slash.
+SELF="${0:-bwrap}"
+case "$SELF" in
+*/*) : ;;
+*)
+	OLDIFS=$IFS
+	IFS=:
+	for _p in $PATH; do
+		[ -x "$_p/$SELF" ] && { SELF="$_p/$SELF"; break; }
+	done
+	IFS=$OLDIFS
+	;;
+esac
+SELFDIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 USR=$(dirname -- "$SELFDIR")
 LANDLOCK="$USR/bin/landlock-wrap"
 PROOT="$USR/bin/proot"

@@ -48,8 +48,8 @@ install_pkg() {
 }
 
 # node-pty 需要安卓原生绑定：dsh 用 --ignore-scripts 安装，随后注入 CI 预编译产物
-install_pkg "${Versions.ZCODE_TGZ}" ".cli-installed-zcode" "" "zcode TUI"
-install_pkg "${Versions.DSH_TGZ}" ".cli-installed-dsh" "--ignore-scripts" "DeepSeek Harness"
+install_pkg "${Versions.ZCODE_TGZ}" ".cli-installed-zcode-${Versions.ZCODE}" "" "zcode TUI"
+install_pkg "${Versions.DSH_TGZ}" ".cli-installed-dsh-${Versions.DSH}" "--ignore-scripts" "DeepSeek Harness"
 
 if [ -f "${'$'}PKG/node-pty-prebuild/pty.node" ] && [ -d "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty" ]; then
   PTY_DIR="${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty/prebuilds/android-arm64"
@@ -149,8 +149,8 @@ install_pkg() {
   done
 }
 
-install_pkg "${Versions.ZCODE_TGZ}" ".cli-installed-zcode" "" "zcode TUI"
-install_pkg "${Versions.DSH_TGZ}" ".cli-installed-dsh" "--ignore-scripts" "DeepSeek Harness"
+install_pkg "${Versions.ZCODE_TGZ}" ".cli-installed-zcode-${Versions.ZCODE}" "" "zcode TUI"
+install_pkg "${Versions.DSH_TGZ}" ".cli-installed-dsh-${Versions.DSH}" "--ignore-scripts" "DeepSeek Harness"
 
 if [ -f "${'$'}PKG/node-pty-prebuild/pty.node" ] && [ -d "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty" ]; then
   PTY_DIR="${'$'}USR/lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty/prebuilds/android-arm64"
