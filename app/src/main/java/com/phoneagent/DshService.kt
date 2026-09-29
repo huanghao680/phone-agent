@@ -57,6 +57,13 @@ class DshService : Service() {
             // danger-full-access, but headless/CLI profiles spawned from
             // sessions inherit this runtime and need the sandbox staged
             NodeRuntime.ensureSandboxTools(this)
+            // storage access facts, measured from this process (the app's own
+            // mount namespace — an adb shell session sees something different)
+            try {
+                StorageDiag.run(this)
+            } catch (_: Exception) {
+                // diagnostics must never keep the service from starting
+            }
             if (Bootstrap.dshNeedsInstall(this)) {
                 notify("正在安装 zcode / dsh 组件（首次需联网）…")
                 val ok = Bootstrap.install(this) { line -> appendLog(line) }
