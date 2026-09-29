@@ -134,6 +134,23 @@ workspace 外写入   → 拒绝（Permission denied；真实文件系统无残�
 - **`read_image` 或 `glob`/`grep` 失效**：多半是 agent 自更新把补丁冲掉了——重开一次 App（或跑一次设置页的更新）会重跑补丁器；日志里会有 `[phone-agent] …patched` 记录。
 - **通知不显示**：Android 13+ 在系统设置里手动允许通知（不影响功能）。
 
+## dsh 插件系统（第三方插件实测可用）
+
+dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh-plugin-manager` 在 profile 目录里跑 `pnpm view/add` 完成检索、安装、启用与回滚。本移植为其补齐了两个前提：
+
+- **pnpm**：插件管理器的外部依赖。固定使用 **pnpm 10（纯 JS）**——pnpm 12 的原生可执行文件采用 flock 存储锁，在目标文件系统上直接 `ERR_PNPM_STORE_DIR_ACQUIRE_OPERATION_LOCK: lock_shared() not supported`。App 启动时自动装好（离线时下次启动重试）。
+- **registry 计划**：管理器自带 npmjs → npmmirror 的回退链，与设置的 npm 镜像无关（腾讯镜像会被当作"私有源"单独询问）。
+
+真机验证（dsh 0.1.7-rc.2，乐视）：
+
+| 插件 | 类型 | 结果 |
+|---|---|---|
+| `dsh-balance-plugin@0.2.2` | 余额监控 | ✅ 侧边栏底部实时显示 DeepSeek 余额（服务端复用注入的 `DEEPSEEK_API_KEY`，`/query-balance` 200） |
+| `dsh-theme-studio@0.6.3` | 外观/主题 | ✅ 设置页出现「主题工作室」：12 组主题预设（Forest/Monochrome…）、强调色自定义 |
+| `dsh-balance@0.2.6`、`@eternalnight/dsh-theme@0.5.1` | 同类 | ❌ 面向更新的 dsh（`ctx.settings.register` 等 0.2.x API），在 0.1.7 上客户端崩溃（React #130）或启动失败——**选插件时看它的 peerDependencies 是否声明 dsh 0.1.7** |
+
+插件管理工具（`plugin_manager`）默认只在 Web GUI 的 Creator 模式启用；CLI 会话如需用工具安装，在 profile 的 `cordis.patch.yml` 加 `- id: tool-plugin-manager \n name: '@deepseek-ai/dsh-plugin-manager/tools' \n disabled: false`，或直接用低层命令 `dsh plugin --profile <name> add <pkg>`（转发 pnpm，装完需自行把 bundle 名写进 profile `package.json` 的 `dsh.profile.bundles`）。
+
 ## 已知限制
 
 - **129 个 ELF 二进制**把 Termux 前缀编译进了 `.rodata`（无法安全做文本替换）；核心命令（bash/node/npm/git/python/curl/jq/rg）都不受影响。
