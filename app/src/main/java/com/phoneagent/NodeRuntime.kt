@@ -143,6 +143,11 @@ object NodeRuntime {
             // Node's own fetch uses bundled CAs and is unaffected.
             "CURL_CA_BUNDLE" to "$usr/etc/tls/cert.pem",
             "SSL_CERT_FILE" to "$usr/etc/tls/cert.pem",
+            // Android has no bubblewrap/Landlock, so dsh refuses to run bash in
+            // the default workspace-write sandbox ("no sandbox backend is
+            // usable"). The GUI session is already danger-full-access; this
+            // keeps headless/CLI profiles working too.
+            "DSH_PERMISSION_MODE" to "danger-full-access",
         )
         env.putAll(Workspace.envOverlay(ctx))
         env.putAll(extra)
