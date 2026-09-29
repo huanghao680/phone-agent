@@ -13,7 +13,7 @@ import android.webkit.WebView
 const val WEBVIEW_PATCH_JS = """
     (function(){
       var m=document.querySelector('meta[name="viewport"]');
-      var c='width=device-width, initial-scale=1, minimum-scale=0.25, maximum-scale=5, user-scalable=yes';
+      var c='width=device-width, initial-scale=1, minimum-scale=0.1, maximum-scale=8, user-scalable=yes';
       if(m){m.setAttribute('content',c);}
     })();
     """
