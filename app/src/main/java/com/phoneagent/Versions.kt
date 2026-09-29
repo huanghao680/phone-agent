@@ -14,6 +14,13 @@ object Versions {
     /** Static musl ripgrep that backs dsh's glob/grep on Android. */
     const val RIPGREP_VERSION = "1.18.0"
 
+    /**
+     * pnpm 10 for dsh's plugin manager. pnpm 12 ships a native executable whose
+     * store operation lock (flock-based) is unsupported on the target
+     * filesystems; 10.x is pure JS and verified working on device.
+     */
+    const val PNPM_VERSION = "10.34.6"
+
     const val ZCODE_TGZ = "zcode-app-cli-$ZCODE.tgz"
     const val DSH_TGZ = "deepseek-ai-dsh-$DSH.tgz"
 

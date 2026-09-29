@@ -196,6 +196,46 @@ object NodeRuntime {
             else "danger-full-access"
         File(usr, "share/phone-agent").apply { mkdirs() }
         File(usr, "share/phone-agent/sandbox-mode").writeText(mode)
+        // pnpm install needs the network; keep it off the boot path
+        kotlin.concurrent.thread(name = "pnpm-install") { ensurePnpm(ctx) }
+    }
+
+    /**
+     * Installs the pinned pnpm 10 the dsh plugin manager shells out to
+     * (`pnpm view/add` in the profile directory). pnpm 12 is unusable here: its
+     * native executable takes flock-based store locks the filesystem does not
+     * support, and corepack no longer ships with Node. No-op when the pinned
+     * version is already present.
+     */
+    private fun ensurePnpm(ctx: Context) {
+        val usr = usrDir(ctx)
+        val manifest = File(usr, "lib/node_modules/pnpm/package.json")
+        if (manifest.exists()) {
+            val current = try {
+                org.json.JSONObject(manifest.readText()).optString("version")
+            } catch (_: Exception) {
+                ""
+            }
+            if (current == Versions.PNPM_VERSION) return
+        }
+        val node = File(usr, "bin/node")
+        val npm = File(usr, "lib/node_modules/npm/bin/npm-cli.js")
+        if (!node.canExecute() || !npm.exists()) return
+        try {
+            val pb = ProcessBuilder(
+                node.absolutePath, npm.absolutePath,
+                "install", "-g", "--prefix", usr.absolutePath,
+                "pnpm@${Versions.PNPM_VERSION}",
+            )
+            pb.environment().putAll(environment(ctx))
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            p.inputStream.use { it.readBytes() } // drain; the caller logs elsewhere
+            p.waitFor()
+        } catch (_: Exception) {
+            // offline first boot: the Plugins page will surface the missing
+            // pnpm on its own; the next boot retries
+        }
     }
 
     fun environment(ctx: Context, extra: Map<String, String> = emptyMap()): Map<String, String> {
