@@ -12,15 +12,16 @@ import android.webkit.WebView
  *
  * Zoom-OUT floor is the layout-fit scale: Chromium refuses to scale below
  * where the layout width fills the viewport, whatever minimum-scale says. The
- * patch therefore widens the layout viewport to 1.5x the screen, which both
- * lowers the zoom-out floor to ~0.67x and makes more content visible at once
- * (the web apps are responsive and our injected CSS fills the width).
+ * patch therefore widens the layout viewport to 2x the screen, which puts the
+ * floor at 0.5x and makes more content visible at once (the web apps are
+ * responsive and our injected CSS fills the width). Pinching back in reaches
+ * 8x, so the usable range is 0.5x-8x.
  */
 const val WEBVIEW_PATCH_JS = """
     (function(){
       var m=document.querySelector('meta[name="viewport"]');
       var base=window.innerWidth||800;
-      var w=Math.round(base*1.5);
+      var w=Math.round(base*2);
       var s=(base/w).toFixed(3);
       var c='width='+w+', initial-scale='+s+', minimum-scale=0.1, maximum-scale=8, user-scalable=yes';
       if(m){m.setAttribute('content',c);}
