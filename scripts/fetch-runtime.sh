@@ -76,6 +76,9 @@ need grep
 need sed
 need gawk
 need tar
+# proot backs the dsh bash-sandbox shim (universal, no root); libtalloc comes
+# in through its Depends
+need proot
 
 echo "== downloading and unpacking ${#RESOLVED[@]} packages"
 for pkg in "${RESOLVED[@]}"; do

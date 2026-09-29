@@ -53,6 +53,10 @@ class DshService : Service() {
                 notify("正在解压 Node 运行时…")
                 NodeRuntime.extractRuntime(this)
             }
+            // bwrap shim + sandbox-mode file: the web GUI itself runs
+            // danger-full-access, but headless/CLI profiles spawned from
+            // sessions inherit this runtime and need the sandbox staged
+            NodeRuntime.ensureSandboxTools(this)
             if (!Bootstrap.isDshInstalled(this)) {
                 notify("正在安装 zcode / dsh 组件（首次需联网）…")
                 val ok = Bootstrap.install(this) { line -> appendLog(line) }

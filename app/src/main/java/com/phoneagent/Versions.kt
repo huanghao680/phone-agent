@@ -5,7 +5,7 @@ package com.phoneagent
  * which drives the CI scripts that stage the matching APK assets.
  */
 object Versions {
-    const val RUNTIME = "node-26.4.0-1"
+    const val RUNTIME = "node-26.4.0-2"
     const val ZCODE = "3.14.3-28"
     const val DSH = "0.1.5-rc.3"
     const val ZCODE_UPSTREAM_REF = "v3.14.3"

@@ -42,17 +42,20 @@ ws.on('open', async () => {
     console.log('SCALE_BEFORE:', scaleBefore.result.value);
 
     if (doPinch) {
-      // two-pointer pinch-out centered mid-screen
+      // two-pointer pinch (default: out = zoom in; "in" arg = zoom out)
+      const zoomOut = process.argv.includes('in');
       const cx = 500, cy = 400;
+      const a = zoomOut ? 200 : 60;
+      const b = zoomOut ? 60 : 200;
       const pts = (d) => ([
         { x: cx - d, y: cy, id: 11 },
         { x: cx + d, y: cy, id: 12 },
       ]);
       const seq = [
-        { type: 'touchStart', touchPoints: pts(60).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
-        { type: 'touchMove', touchPoints: pts(100).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
-        { type: 'touchMove', touchPoints: pts(150).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
-        { type: 'touchMove', touchPoints: pts(200).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
+        { type: 'touchStart', touchPoints: pts(a).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
+        { type: 'touchMove', touchPoints: pts((a + (b - a) / 3)).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
+        { type: 'touchMove', touchPoints: pts((a + 2 * (b - a) / 3)).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
+        { type: 'touchMove', touchPoints: pts(b).map(p => ({ ...p, radiusX: 2, radiusY: 2, force: 0.5 })) },
         { type: 'touchEnd', touchPoints: [] },
       ];
       for (const ev of seq) {

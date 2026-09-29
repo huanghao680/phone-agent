@@ -84,6 +84,7 @@ object NodeRuntime {
 
     /** Copies the bundled CLI tarballs from APK assets to a real path npm can read. */
     fun copyPackages(ctx: Context) {
+        ensureSandboxTools(ctx)
         for (name in arrayOf(Versions.ZCODE_TGZ, Versions.DSH_TGZ)) {
             val out = File(pkgDir(ctx), name)
             ctx.assets.open("packages/$name").use { input ->
@@ -122,6 +123,41 @@ object NodeRuntime {
         }
     }
 
+    /**
+     * Installs the dsh bash-sandbox shim (usr/bin/bwrap, backed by proot from
+     * the runtime + the CI-built landlock-wrap when present) and records the
+     * permission mode dsh profiles should default to. workspace-write requires
+     * at least the universal proot backend; without it agents keep running
+     * with danger-full-access so bash never fails closed.
+     */
+    fun ensureSandboxTools(ctx: Context) {
+        val usr = usrDir(ctx)
+        val bin = File(usr, "bin").apply { mkdirs() }
+        try {
+            ctx.assets.open("scripts/bwrap").use { input ->
+                val out = File(bin, "bwrap")
+                FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
+                out.setExecutable(true, false)
+            }
+        } catch (_: IOException) {
+            // asset absent (stale checkout): sandbox shim not installed
+        }
+        try {
+            ctx.assets.open("native/landlock-wrap").use { input ->
+                val out = File(bin, "landlock-wrap")
+                FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
+                out.setExecutable(true, false)
+            }
+        } catch (_: IOException) {
+            // asset absent: proot tier remains as the fallback backend
+        }
+        val mode =
+            if (File(bin, "bwrap").exists() && File(usr, "bin/proot").exists()) "workspace-write"
+            else "danger-full-access"
+        File(usr, "share/phone-agent").apply { mkdirs() }
+        File(usr, "share/phone-agent/sandbox-mode").writeText(mode)
+    }
+
     fun environment(ctx: Context, extra: Map<String, String> = emptyMap()): Map<String, String> {
         val usr = usrDir(ctx).absolutePath
         val env = mutableMapOf(
@@ -143,11 +179,13 @@ object NodeRuntime {
             // Node's own fetch uses bundled CAs and is unaffected.
             "CURL_CA_BUNDLE" to "$usr/etc/tls/cert.pem",
             "SSL_CERT_FILE" to "$usr/etc/tls/cert.pem",
-            // Android has no bubblewrap/Landlock, so dsh refuses to run bash in
-            // the default workspace-write sandbox ("no sandbox backend is
-            // usable"). The GUI session is already danger-full-access; this
-            // keeps headless/CLI profiles working too.
-            "DSH_PERMISSION_MODE" to "danger-full-access",
+            // dsh bash sandbox mode: written by ensureSandboxTools —
+            // workspace-write when a sandbox backend is staged (bwrap shim +
+            // proot), otherwise danger-full-access so bash never fails closed.
+            // The dsh web GUI session presets danger-full-access itself.
+            "DSH_PERMISSION_MODE" to runCatching {
+                File(usr, "share/phone-agent/sandbox-mode").readText().trim()
+            }.getOrNull().orEmpty().ifEmpty { "danger-full-access" },
         )
         env.putAll(Workspace.envOverlay(ctx))
         env.putAll(extra)

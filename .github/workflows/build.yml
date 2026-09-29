@@ -38,6 +38,12 @@ jobs:
       - name: Cross-compile node-pty for android-arm64
         run: bash scripts/fetch-native.sh
 
+      - name: Compile landlock-wrap (sandbox tier 1, probe-gated at runtime)
+        run: |
+          CC="$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang"
+          mkdir -p app/src/main/assets/native
+          "$CC" -O2 -Wall -Werror scripts/landlock-wrap.c -o app/src/main/assets/native/landlock-wrap
+
       - name: Stage CLI packages (zcode / dsh)
         run: bash scripts/fetch-packages.sh
 

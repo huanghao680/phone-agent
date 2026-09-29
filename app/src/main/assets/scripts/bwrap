@@ -1,0 +1,122 @@
+#!/system/bin/sh
+# bwrap-compatible sandbox shim for Android (phone-agent).
+#
+# dsh-sandbox-local probes and spawns the PATH's `bwrap` with its bwrap
+# profile arguments:
+#   --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent
+#   [--tmpfs /tmp --bind <workspace> <workspace>]   (workspace-write only)
+#   --  bash -c <command>
+#
+# Android cannot run real bubblewrap unprivileged (no user namespaces), so
+# this shim reinterprets the profile with the best available backend:
+#   tier 1  landlock-wrap  kernel-enforced, unprivileged, needs kernel 5.13+
+#   tier 2  proot          ptrace path rewriting; hides everything outside
+#                          the runtime prefix + workspace + temp; works on
+#                          any kernel with no root (universal fallback)
+# Neither backend can provide an ephemeral /tmp, so the temp fs is mapped to
+# $TMPDIR/tmp (and TMPDIR itself stays writable — it is our /tmp equivalent).
+# Both tiers govern file effects only, exactly like dsh's own runners.
+#
+# Fatal shim errors are prefixed "bwrap: " to match the built-in bwrap rung
+# runner-failure signature, so a broken backend surfaces as SANDBOX_UNAVAILABLE
+# instead of a command failure. A non-zero exit from the COMMAND itself is a
+# normal command result and is propagated untouched.
+
+SELFDIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+USR=$(dirname -- "$SELFDIR")
+LANDLOCK="$USR/bin/landlock-wrap"
+PROOT="$USR/bin/proot"
+
+MODE=ro
+WS=
+TMPFS_DST=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--ro-bind) shift 3 ;;
+	--bind) WS="$2"; MODE=ws; shift 3 ;;
+	--tmpfs) TMPFS_DST="$2"; shift 2 ;;
+	--dev|--proc|--chdir) shift 2 ;;
+	--unshare-pid|--die-with-parent) shift 1 ;;
+	--) shift; break ;;
+	-*) shift 1 ;;
+	*) break ;;
+	esac
+done
+# "$@" now holds the command argv.
+
+fatal() {
+	echo "bwrap: phone-agent shim: $*" >&2
+	exit 1
+}
+
+[ -n "$TMPDIR" ] || TMPDIR="/data/user/0/$(basename "$(dirname "$(dirname "$USR")")")/cache"
+mkdir -p "$TMPDIR" 2>/dev/null || true
+
+# ---- tier 1: Landlock (kernel-enforced, unprivileged) -----------------------
+if [ -x "$LANDLOCK" ] && "$LANDLOCK" --probe >/dev/null 2>&1; then
+	set -A PFX "$LANDLOCK" --ro /
+	set -A PFX "${PFX[@]}" --rw /dev/null
+	set -A PFX "${PFX[@]}" --rw "$TMPDIR"
+	[ "$MODE" = ws ] && set -A PFX "${PFX[@]}" --rw "$WS"
+	exec "${PFX[@]}" -- "$@"
+fi
+
+# ---- tier 2: proot (universal, userland) ------------------------------------
+[ -x "$PROOT" ] || fatal "no usable backend (landlock unavailable, proot missing)"
+# Termux-built proot looks for its ptrace loader under the Termux prefix;
+# point it at our runtime copy explicitly.
+if [ -x "$USR/libexec/proot/loader" ]; then
+	PROOT_LOADER="$USR/libexec/proot/loader"
+	export PROOT_LOADER
+fi
+# proot also defaults its scratch dir to the Termux prefix; use our temp.
+PROOT_TMP_DIR="$TMPDIR/tmp"
+export PROOT_TMP_DIR
+
+SKEL="$TMPDIR/bwrap-shim-root.$$"
+rm -rf "$SKEL" 2>/dev/null || true
+mkdir -p "$SKEL" || fatal "cannot create skeleton root under $TMPDIR"
+trap 'rm -rf "$SKEL"' EXIT
+
+set -A PFX "$PROOT" -r "$SKEL"
+# read-only host system trees (execution + libraries)
+for _d in system vendor product apex odm system_ext linkerconfig; do
+	[ -d "/$_d" ] || continue
+	set -A PFX "${PFX[@]}" -b "/$_d:/$_d"
+	mkdir -p "$SKEL/$_d" 2>/dev/null || true
+done
+set -A PFX "${PFX[@]}" -b /dev:/dev -b /proc:/proc -b /sys:/sys
+mkdir -p "$SKEL/dev" "$SKEL/proc" "$SKEL/sys" 2>/dev/null || true
+# the runtime prefix at its real path (node/bash/agents live here)
+set -A PFX "${PFX[@]}" -b "$USR:$USR"
+mkdir -p "$SKEL$USR" 2>/dev/null || true
+# temp: TMPDIR at its real path (rw), plus the /tmp spelling of the same dir
+if [ -n "$TMPDIR" ]; then
+	mkdir -p "$TMPDIR/tmp" 2>/dev/null || true
+	set -A PFX "${PFX[@]}" -b "$TMPDIR:$TMPDIR" -b "$TMPDIR/tmp:/tmp"
+	mkdir -p "$SKEL$TMPDIR" "$SKEL/tmp" 2>/dev/null || true
+fi
+# the workspace is the only other writable root (workspace-write mode)
+if [ "$MODE" = ws ] && [ -n "$WS" ]; then
+	mkdir -p "$WS" 2>/dev/null || true
+	set -A PFX "${PFX[@]}" -b "$WS:$WS"
+	mkdir -p "$SKEL$WS" 2>/dev/null || true
+fi
+# $HOME outside the visible tree would break tools that touch it; remap it
+# into the temp dir (read of the real home is not promised in either mode)
+REMAP_HOME=1
+case "$HOME" in
+"$TMPDIR"/*|"$USR"/*) REMAP_HOME=0 ;;
+esac
+if [ -n "$WS" ]; then
+	case "$HOME" in
+	"$WS"|"$WS"/*) REMAP_HOME=0 ;;
+	esac
+fi
+if [ -z "$HOME" ] || [ "$REMAP_HOME" = 1 ]; then
+	HOME="$TMPDIR/tmp/home"
+	mkdir -p "$HOME" 2>/dev/null || true
+	export HOME
+fi
+
+exec "${PFX[@]}" "$@"
