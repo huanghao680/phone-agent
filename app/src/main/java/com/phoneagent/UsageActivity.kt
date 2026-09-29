@@ -91,7 +91,7 @@ class UsageActivity : ComponentActivity() {
                 }
             }
             var totalIn = 0L; var totalOut = 0L; var totalRe = 0L; var totalReq = 0L
-            sb.append("近 14 天用量\n──────────────\n")
+            sb.append("【Zcode】\n近 14 天用量\n──────────────\n")
             for ((day, v) in daily) {
                 totalIn += v[0]; totalOut += v[1]; totalRe += v[2]; totalReq += v[3]
                 sb.append(day).append("  ↑").append(fmt(v[0]))
@@ -124,6 +124,7 @@ class UsageActivity : ComponentActivity() {
             }
             dbc.close()
             tmp.delete()
+            sb.append('\n').append(DshUsage.query(this))
             sb.toString()
         } catch (e: Exception) {
             "读取用量失败：${e.message}"
