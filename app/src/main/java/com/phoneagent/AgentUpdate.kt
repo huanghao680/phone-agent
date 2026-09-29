@@ -127,12 +127,14 @@ object AgentUpdate {
             p.inputStream.bufferedReader().forEachLine(onLine)
             val code = p.waitFor()
             if (code == 0) {
-                markerFor(ctx, pkg).takeIf { it.exists() }?.delete()
-                // re-inject android-specific pieces after a scripted install
+                clearMarkers(ctx, pkg)
+                // re-inject android-specific pieces after a scripted install:
+                // the package tree was replaced, so every patch is gone
                 if (pkg == "@deepseek-ai/dsh") {
                     injectPty(ctx, onLine)
                     sharpWasm(ctx, node, npm, usr, onLine)
                 }
+                runAndroidPatches(ctx, onLine)
                 onLine("[update] $pkg 更新完成 ✅")
                 true
             } else {
@@ -145,10 +147,36 @@ object AgentUpdate {
         }
     }
 
-    private fun markerFor(ctx: Context, pkg: String): File = File(
-        NodeRuntime.usrDir(ctx),
-        if (pkg == "zcode-app-cli") ".cli-installed-zcode" else ".cli-installed-dsh",
-    )
+    /** Markers carry the packaged version, so match by prefix. */
+    private fun clearMarkers(ctx: Context, pkg: String) {
+        val prefix = if (pkg == "zcode-app-cli") ".cli-installed-zcode" else ".cli-installed-dsh"
+        NodeRuntime.usrDir(ctx).listFiles()?.forEach { f ->
+            if (f.name.startsWith(prefix)) f.delete()
+        }
+    }
+
+    /**
+     * Re-applies every Android patch to the freshly installed tree: an update
+     * replaces the package files, so without this the flock stub, the link()
+     * fallback, the sandbox platform chain and the ripgrep shim are all lost.
+     */
+    private fun runAndroidPatches(ctx: Context, onLine: (String) -> Unit) {
+        val script = File(NodeRuntime.usrDir(ctx), "share/phone-agent/patch-dsh-flock.sh")
+        if (!script.exists()) {
+            onLine("[update] 未找到补丁脚本，跳过 Android 适配")
+            return
+        }
+        try {
+            val pb = ProcessBuilder("/system/bin/sh", script.absolutePath)
+            pb.environment().putAll(NodeRuntime.environment(ctx))
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            p.inputStream.bufferedReader().forEachLine(onLine)
+            if (p.waitFor() != 0) onLine("[update] 补丁脚本返回非零（部分适配可能未生效）")
+        } catch (e: Exception) {
+            onLine("[update] 补丁脚本执行异常：${e.message}")
+        }
+    }
 
     private fun injectPty(ctx: Context, onLine: (String) -> Unit) {
         val src = File(NodeRuntime.pkgDir(ctx), "node-pty-prebuild/pty.node")
