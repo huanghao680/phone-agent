@@ -39,7 +39,15 @@ Cover at least:
    web_fetch, subagent, workflow, skill, create_goal/get_goal.
    Note any tool that is missing or unusable.
 
-3. Android-specific fixes that this port is supposed to provide — verify each
+3. Toolchain that this port now ships — verify each works and report the
+   version you observed: bash, coreutils, ripgrep (rg), curl (HTTPS reachable),
+   jq, git (init/add/commit AND clone), python3.
+   Also report these storage facts (read/write vs exec) for: the app home
+   (internal), /storage/emulated/0, and
+   /storage/emulated/0/Android/data/com.phoneagent — a workspace there cannot
+   execute binaries, which is worth stating explicitly.
+
+4. Android-specific fixes that this port is supposed to provide — verify each
    and report pass/fail with evidence:
    a) glob/grep work at all (they need a static ripgrep behind
       @vscode/ripgrep-android-arm64)

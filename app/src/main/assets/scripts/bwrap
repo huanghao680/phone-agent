@@ -24,6 +24,10 @@
 
 # Locate ourselves: libuv's execvp passes argv[0] as the BARE name ("bwrap")
 # while shells pass a path — resolve through PATH when there is no slash.
+# Everything here must be pure shell: the sandbox may be spawned with a
+# sanitized environment (no LD_LIBRARY_PATH), in which case external commands
+# like dirname/basename cannot even link and the shim dies before running
+# anything — that is what broke the workflow tool.
 SELF="${0:-bwrap}"
 case "$SELF" in
 */*) : ;;
@@ -36,8 +40,21 @@ case "$SELF" in
 	IFS=$OLDIFS
 	;;
 esac
-SELFDIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
-USR=$(dirname -- "$SELFDIR")
+SELFDIR=${SELF%/*}
+case "$SELFDIR" in "$SELF") SELFDIR=. ;; esac
+SELFDIR=$(CDPATH= cd -- "$SELFDIR" && pwd)
+USR=${SELFDIR%/*}
+# Self-sufficient environment: the caller may spawn us with a sanitized
+# environment (dsh's tool sandbox does), and every helper this script uses —
+# mkdir, chmod, rm, proot itself — is a Termux binary that cannot even link
+# without LD_LIBRARY_PATH pointing at the runtime. Derive both from our own
+# location so the shim never depends on what it inherited.
+LD_LIBRARY_PATH="$USR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH
+case ":$PATH:" in
+*":$USR/bin:"*) : ;;
+*) PATH="$USR/bin:$PATH"; export PATH ;;
+esac
 LANDLOCK="$USR/bin/landlock-wrap"
 PROOT="$USR/bin/proot"
 
@@ -63,7 +80,11 @@ fatal() {
 	exit 1
 }
 
-[ -n "$TMPDIR" ] || TMPDIR="/data/user/0/$(basename "$(dirname "$(dirname "$USR")")")/cache"
+# $USR is <files>/usr, so its grandparent is the app data dir; derive the cache
+# path from it without external commands (see the note above).
+APPDIR=${USR%/*}   # <files>
+APPDIR=${APPDIR%/*} # app data dir
+[ -n "$TMPDIR" ] || TMPDIR="$APPDIR/cache"
 mkdir -p "$TMPDIR" 2>/dev/null || true
 
 # ---- tier 1: Landlock (kernel-enforced, unprivileged) -----------------------
@@ -90,7 +111,16 @@ export PROOT_TMP_DIR
 SKEL="$TMPDIR/bwrap-shim-root.$$"
 rm -rf "$SKEL" 2>/dev/null || true
 mkdir -p "$SKEL" || fatal "cannot create skeleton root under $TMPDIR"
-trap 'rm -rf "$SKEL"' EXIT
+cleanup() {
+	chmod -R u+w "$SKEL" 2>/dev/null
+	rm -rf "$SKEL" 2>/dev/null
+}
+trap 'cleanup' EXIT
+# job_kill sends SIGTERM to the process group: without this the frozen
+# skeleton survives (its read-only dirs block a plain rm) and every killed job
+# leaks a tree into the cache directory
+trap 'cleanup; exit 143' TERM
+trap 'cleanup; exit 130' INT
 
 set -A PFX "$PROOT" -r "$SKEL"
 # read-only host system trees (execution + libraries)
@@ -155,6 +185,5 @@ fi
 # frozen roots used to pile up in TMPDIR).
 "${PFX[@]}" "$@"
 RC=$?
-chmod -R u+w "$SKEL" 2>/dev/null
-rm -rf "$SKEL" 2>/dev/null
+cleanup
 exit $RC

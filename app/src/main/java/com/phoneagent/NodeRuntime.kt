@@ -209,6 +209,9 @@ object NodeRuntime {
             "TMPDIR" to ctx.cacheDir.absolutePath,
             "TERM" to "xterm-256color",
             "LANG" to "en_US.UTF-8",
+            // Android's default SHELL is /bin/sh (mksh); agents that inspect it
+            // should see the shell they actually get
+            "SHELL" to "$usr/bin/bash",
             "NODE_PATH" to "$usr/lib/node_modules",
             "npm_config_registry" to Prefs.npmRegistry(ctx),
             // The Termux-built Node hardcodes /data/data/com.termux/.../openssl.cnf;
@@ -224,6 +227,13 @@ object NodeRuntime {
             // (git-upload-pack was "No such file or directory" without this).
             "GIT_EXEC_PATH" to "$usr/libexec/git-core",
             "GIT_TEMPLATE_DIR" to "$usr/share/git-core/templates",
+            // git's libcurl uses the CA path baked in at build time and ignores
+            // CURL_CA_BUNDLE, so https clones fail with "error adding trust
+            // anchors". GIT_CONFIG_* injects the setting without touching any
+            // config file.
+            "GIT_CONFIG_COUNT" to "1",
+            "GIT_CONFIG_KEY_0" to "http.sslCAInfo",
+            "GIT_CONFIG_VALUE_0" to "$usr/etc/tls/cert.pem",
             // dsh bash sandbox mode: written by ensureSandboxTools —
             // workspace-write when a sandbox backend is staged (bwrap shim +
             // proot), otherwise danger-full-access so bash never fails closed.

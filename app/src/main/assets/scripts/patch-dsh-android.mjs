@@ -422,5 +422,53 @@ exec "$U/bin/node" --expose-internals "$U/lib/node_modules/@deepseek-ai/dsh/lib/
   }
 }
 
+// --- 10. sharp wasm fallback ------------------------------------------------
+// sharp ships no android-arm64 binary, so read_image dies with
+// "Could not load the sharp module using the android-arm64 runtime". sharp's
+// loader accepts @img/sharp-wasm32 (with its wasm libvips) as a fallback, and
+// that has to live inside sharp's own node_modules. It used to be installed
+// only by the packaged-install path, so an agent self-update left images
+// broken again.
+{
+  const dir = resolvePkgDir('sharp');
+  if (!dir) {
+    console.log('[phone-agent] skip sharp fallback: sharp not present');
+  } else {
+    let sharpVersion = null;
+    try {
+      sharpVersion = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version;
+    } catch {
+      /* unreadable */
+    }
+    const wasmPkg = join(dir, 'node_modules/@img/sharp-wasm32/package.json');
+    const marker = sharpVersion ? join(dir, `.phone-agent-wasm-${sharpVersion}`) : null;
+    if (!sharpVersion) {
+      console.log('[phone-agent] skip sharp fallback: no version');
+    } else if (existsSync(wasmPkg)) {
+      console.log(`[phone-agent] sharp wasm fallback: present (sharp ${sharpVersion})`);
+    } else if (marker && existsSync(marker)) {
+      console.log('[phone-agent] sharp wasm fallback: already attempted for this version');
+    } else {
+      const npmCli = join(USR, 'lib/node_modules/npm/bin/npm-cli.js');
+      console.log(`[phone-agent] sharp wasm fallback: installing @img/sharp-wasm32@${sharpVersion} (needs network)`);
+      spawnSync(join(USR, 'bin/node'), [
+        npmCli, 'install', '--prefix', dir, '--no-save', '--no-package-lock', '--ignore-scripts',
+        `@img/sharp-wasm32@${sharpVersion}`,
+      ], { stdio: 'ignore', timeout: 5 * 60 * 1000, env: process.env });
+      if (existsSync(wasmPkg)) {
+        console.log('[phone-agent] sharp wasm fallback: installed');
+        patched++;
+      } else {
+        console.log('[phone-agent] WARN sharp wasm fallback: install failed; image reading stays unavailable');
+      }
+      try {
+        if (marker) writeFileSync(marker, 'attempted\n');
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 console.log(`[phone-agent] dsh android patch done (${patched} change(s), ${warned} warning(s))`);
 if (warned > 0) process.exitCode = 1;
