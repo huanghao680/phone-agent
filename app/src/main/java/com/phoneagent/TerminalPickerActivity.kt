@@ -4,8 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,7 +48,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  */
 class TerminalPickerActivity : ComponentActivity() {
 
-    private data class Choice(val id: String, val title: String, val desc: String, val available: Boolean)
+    private data class Choice(
+        val id: String,
+        val title: String,
+        val desc: String,
+        val available: Boolean,
+        val iconRes: Int? = null,
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,6 +109,7 @@ class TerminalPickerActivity : ComponentActivity() {
                 if (opencodeAvailable) "开源编码 Agent（Bun 单文件 + musl loader 运行）"
                 else "二进制未就绪：重新打开 APP 解压运行时后再试",
                 opencodeAvailable,
+                iconRes = R.drawable.ic_opencode_fg,
             ),
         )
         Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
@@ -122,6 +133,16 @@ class TerminalPickerActivity : ComponentActivity() {
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
+                                c.iconRes?.let { iconRes ->
+                                    androidx.compose.foundation.Image(
+                                        painter = androidx.compose.ui.res.painterResource(iconRes),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .padding(end = 10.dp)
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                    )
+                                }
                                 M3Text(
                                     c.title,
                                     color = if (c.available) MiuixTheme.colorScheme.onSurface
