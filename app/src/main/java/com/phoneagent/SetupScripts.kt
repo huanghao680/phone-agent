@@ -275,8 +275,7 @@ mkdir -p "${'$'}TMPDIR"
 # GNU C++ runtime from the same Alpine build as the loader
 export LD_LIBRARY_PATH="${'$'}PKG${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
 exec "${'$'}LOADER" "${'$'}BIN"
-""".trim() + "
-"
+""".trim() + "\n"
         return write(ctx, "run-opencode.sh", body)
     }
 
