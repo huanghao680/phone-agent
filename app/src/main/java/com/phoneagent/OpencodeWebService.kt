@@ -85,6 +85,9 @@ class OpencodeWebService : Service() {
             env["NO_PROXY"] = "127.0.0.1,localhost"
             pb.environment().putAll(env)
             pb.redirectErrorStream(true)
+            // serve writes to the redirected file; appendLog kept for parity
+            val serveLog = File(cacheDir, "opencode-serve.log")
+            pb.redirectOutput(serveLog)
             val p = pb.start()
             proc = p
             thread(name = "opencode-log") {
@@ -96,7 +99,10 @@ class OpencodeWebService : Service() {
                 OpencodeState.serverReady = true
                 notify("opencode 运行中")
             } else {
-                OpencodeState.lastError = "opencode 未在 60 秒内就绪，详见 cache/opencode.log"
+                val tail = runCatching {
+                    serveLog.readText().trim().lineSequence().lastOrNull()?.take(160)
+                }.getOrNull()
+                OpencodeState.lastError = "opencode 未在 60 秒内就绪" + (tail?.let { "：$it" } ?: "，详见 cache/opencode-serve.log")
                 notify(OpencodeState.lastError!!)
                 p.destroy()
             }
