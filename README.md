@@ -2,7 +2,7 @@
 
 把 [Zcode](https://github.com/zai-org/ZCode) 与 [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 装进安卓手机本机运行的**独立 APP**——不依赖 Termux 应用，root 可选。
 
-> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.26**（versionCode 43），dsh **0.2.0-rc.2**。
+> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.28**（versionCode 45），dsh **0.2.0-rc.2**。
 
 三个桌面图标：
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | **Zcode** | 横屏全屏 Web UI | 官方 `packages/web` SPA + Hono 服务端（CI 构建），内嵌 Node 起 127.0.0.1:3030，WebView 呈现 |
 | **DeepSeek Harness** | 横屏全屏 Web UI | 内嵌 Node 起 `dsh web`（127.0.0.1:3080），WebView 呈现 |
-| **终端** | TUI 选择器 | 四选一：**zcode TUI / dsh TUI / Codex CLI / Claude Code**（Termux 终端模拟器 + 真实 PTY），页内还有**用量统计**与**设置**入口 |
+| **终端** | TUI 选择器 | 五选一：**zcode TUI / dsh TUI / Codex CLI / Claude Code / opencode**（Termux 终端模拟器 + 真实 PTY），页内还有**用量统计**与**设置**入口 |
 
 外加**可选的 root 深度集成**：一键安装 Magisk 模块，把 `zcode` / `dsh` 命令装进 `/system/bin`，之后机内任意终端可执行，且运行时不需要 root。
 
@@ -50,6 +50,20 @@ Phone-Agent.apk
 **终端**：选择要跑的 TUI。zcode TUI 内执行 `/login` 完成 OAuth；Codex/Claude 用各自的登录方式（凭证在应用私有目录，与官方一致）。
 
 组件升级是**版本感知**的：安装脚本会比较 `package.json` 里的版本与 APK 内置版本，不一致才重装（早期版本"入口文件存在就跳过"导致打包升级永远不生效，已修）。
+
+## opencode 的移植（Bun 单文件在 bionic 上的解法）
+
+opencode 是 **Bun 单文件可执行文件**（185 MiB），官方只有 glibc/musl 两种 Linux 构建。在 Android 上直接跑会 `No such file or directory`——不是文件不存在，而是 ELF interpreter 找不到。解法是显式用 musl loader 启动，并补齐它链接的 GNU C++ 运行时：
+
+```sh
+ld-musl-aarch64.so.1 opencode      # + LD_LIBRARY_PATH 含 libstdc++.so.6 / libgcc_s.so.1
+```
+
+三者都取自 Alpine Linux v3.20 aarch64（`musl`、`libstdc++`、`libgcc`），与彼此同源，实测 `opencode --version` → `1.18.33`、TUI 完整渲染。
+
+还有一个 Android 专属坑：**Bun 会在 `$TMPDIR` 下自解压**。Android 既没有 `/tmp`（根分区只读），继承来的 `/data/local/tmp` 又会 `EACCES`；启动脚本把 `TMPDIR` **钉死在 App 缓存目录**才起得来。
+
+- 形态：终端选择器第五项 **opencode TUI**（真实 PTY）；它自带 `serve` / `web` 子命令，后续可按需加 Web UI 入口。
 
 ## Android 适配层（本项目的主要工作之一）
 
