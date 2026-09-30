@@ -34,7 +34,10 @@ class OpencodeWebService : Service() {
         startForeground(Notifications.ID_OPENCODE, Notifications.build(this, "正在启动 opencode…"))
         OpencodeState.serverReady = false
         OpencodeState.lastError = null
-        thread(name = "opencode-boot") { boot() }
+        thread(name = "opencode-boot") {
+            appendLog("=== boot start ===")
+            boot()
+        }
         return START_STICKY
     }
 
@@ -49,9 +52,12 @@ class OpencodeWebService : Service() {
                 notify("正在解压 Node 运行时…")
                 NodeRuntime.extractRuntime(this)
             }
+            appendLog("[1] runtime ok")
             NodeRuntime.copyPackages(this)
+            appendLog("[2] assets staged")
             NodeRuntime.ensureSandboxTools(this)
             NodeRuntime.seedAgentInstructions(this)
+            appendLog("[3] sandbox/instructions ok")
             if (!BinaryAgents.isReady(this, BinaryAgents.OPENCODE)) {
                 notify("正在解压 opencode…")
                 if (!BinaryAgents.ensure(this, BinaryAgents.OPENCODE) { line -> appendLog(line) }) {
@@ -70,6 +76,7 @@ class OpencodeWebService : Service() {
                 "--hostname", "127.0.0.1",
                 "--print-logs",
             )
+            appendLog("[4] spawning serve: " + args.joinToString(" "))
             val pb = ProcessBuilder(args)
             if (workDir.isDirectory) pb.directory(workDir)
             val env = NodeRuntime.environment(this).toMutableMap()
@@ -89,6 +96,7 @@ class OpencodeWebService : Service() {
             val serveLog = File(cacheDir, "opencode-serve.log")
             pb.redirectOutput(serveLog)
             val p = pb.start()
+            appendLog("[5] serve spawned")
             proc = p
             thread(name = "opencode-log") {
                 p.inputStream.bufferedReader().forEachLine { line -> appendLog(line) }
