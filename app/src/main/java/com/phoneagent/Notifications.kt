@@ -13,6 +13,7 @@ object Notifications {
     const val ID_SESSION = 1
     const val ID_DSH = 2
     const val ID_ZCODE_WEB = 3
+    const val ID_OPENCODE = 4
     const val ID_SESSION_DONE = 10
 
     fun ensureChannel(ctx: Context) {

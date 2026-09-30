@@ -278,7 +278,7 @@ mkdir -p "${'$'}TMPDIR" 2>/dev/null || true
 # prefix so the bundled shell tools (mkdir and friends) keep working
 export LD_LIBRARY_PATH="${'$'}PKG:${'$'}USR/lib${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
 export PATH="${'$'}USR/bin:${'$'}PATH"
-exec "${'$'}LOADER" "${'$'}BIN"
+exec "${'$'}LOADER" "${'$'}BIN" "${'$'}@"
 """.trim() + "\n"
         return write(ctx, "run-opencode.sh", body)
     }

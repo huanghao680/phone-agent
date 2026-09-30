@@ -65,6 +65,21 @@
             </intent-filter>
         </activity>
 
+        <!-- Launcher icon 4: opencode web UI -->
+        <activity
+            android:name=".OpencodeWebActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="true"
+            android:icon="@mipmap/ic_opencode"
+            android:label="@string/opencode_label"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".UsageActivity"
             android:exported="false"
@@ -123,5 +138,9 @@
         <service
             android:name=".SessionService"
             android:exported="false" />
-    </application>
+            <service
+            android:name=".OpencodeWebService"
+            android:exported="false" />
+
+</application>
 </manifest>

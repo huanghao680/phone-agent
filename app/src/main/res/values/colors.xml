@@ -2,6 +2,7 @@
 <resources>
     <color name="ic_bg">#0B1220</color>
     <color name="ic_dsh_bg">#FFFFFF</color>
+    <color name="ic_opencode_bg">#0F172A</color>
     <color name="accent">#22D3EE</color>
     <color name="terminal_green">#4ADE80</color>
     <color name="screen_bg">#000000</color>

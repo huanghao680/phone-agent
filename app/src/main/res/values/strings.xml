@@ -11,6 +11,7 @@
     <string name="usage_empty">暂无 zcode 会话记录</string>
     <string name="usage_open">用量统计</string>
     <string name="dsh_label">DeepSeek Harness</string>
+    <string name="opencode_label">opencode</string>
     <string name="settings_label">Phone Agent 设置</string>
     <string name="initializing_runtime">正在初始化 Node 运行时…</string>
     <string name="dsh_loading">正在启动 DeepSeek Harness 服务…</string>
