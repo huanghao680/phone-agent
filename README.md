@@ -2,7 +2,7 @@
 
 把 [Zcode](https://github.com/zai-org/ZCode) 与 [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 装进安卓手机本机运行的**独立 APP**——不依赖 Termux 应用，root 可选。
 
-> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.22**（versionCode 39）。
+> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.24**（versionCode 41），dsh **0.2.0-rc.2**。
 
 三个桌面图标：
 
@@ -145,9 +145,11 @@ dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh
 
 | 插件 | 类型 | 结果 |
 |---|---|---|
-| `dsh-balance-plugin@0.2.2` | 余额监控 | ✅ 侧边栏底部实时显示 DeepSeek 余额（服务端复用注入的 `DEEPSEEK_API_KEY`，`/query-balance` 200） |
+| `dsh-balance-widget@0.6.2` | 余额监控（dsh 0.2.x） | ✅ 侧边栏底部卡片：实时余额 + 当日消耗（服务端复用注入的 `DEEPSEEK_API_KEY`） |
 | `dsh-theme-studio@0.6.3` | 外观/主题 | ✅ 设置页出现「主题工作室」：12 组主题预设（Forest/Monochrome…）、强调色自定义 |
-| `dsh-balance@0.2.6`、`@eternalnight/dsh-theme@0.5.1` | 同类 | ❌ 面向更新的 dsh（`ctx.settings.register` 等 0.2.x API），在 0.1.7 上客户端崩溃（React #130）或启动失败——**选插件时看它的 peerDependencies 是否声明 dsh 0.1.7** |
+| `dsh-balance-plugin@0.2.2`（0.1.7 专用） | 余额监控 | 0.2.0 起被 dsh 的兼容性评估器自动跳过（peer 声明 `dsh 0.1.7`），换用上面的 widget 即可 |
+
+> 插件兼容性由 dsh 自身的评估器把关：peer 依赖与运行时不匹配的 bundle 会被**跳过并在插件页标注错误**（fail-closed，不拖垮 GUI）。选插件时看它的 `peerDependencies`。
 
 插件管理工具（`plugin_manager`）默认只在 Web GUI 的 Creator 模式启用；CLI 会话如需用工具安装，在 profile 的 `cordis.patch.yml` 加 `- id: tool-plugin-manager \n name: '@deepseek-ai/dsh-plugin-manager/tools' \n disabled: false`，或直接用低层命令 `dsh plugin --profile <name> add <pkg>`（转发 pnpm，装完需自行把 bundle 名写进 profile `package.json` 的 `dsh.profile.bundles`）。
 
