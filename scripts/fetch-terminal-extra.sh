@@ -39,11 +39,16 @@ for spec in "libstdc++:$LIBSTDCXX_APK" "libgcc:$LIBGCC_APK"; do
   name="${spec%%:*}"; apk="${spec#*:}"
   curl -fsSL "https://dl-cdn.alpinelinux.org/alpine/v3.20/main/aarch64/$apk" -o "$WORK/$name.apk"
   mkdir -p "$WORK/$name"
-  tar -xzf "$WORK/$name.apk" -C "$WORK/$name" 2>/dev/null || true
+  tar -xzf "$WORK/$name.apk" -C "$WORK/$name" || { echo "!! failed to unpack $apk" >&2; exit 1; }
 done
-cp "$WORK/libstdc++"/usr/lib/libstdc++.so.* "$ASSETS/libstdc++.so.6" 2>/dev/null
-cp "$WORK/libgcc"/usr/lib/libgcc_s.so.1 "$ASSETS/libgcc_s.so.1" 2>/dev/null
-chmod 644 "$ASSETS/libstdc++.so.6" "$ASSETS/libgcc_s.so.1" 2>/dev/null
+STDCXX=$(ls "$WORK"/libstdc++/usr/lib/libstdc++.so.* 2>/dev/null | head -1)
+GCC_S=$(ls "$WORK"/libgcc/usr/lib/libgcc_s.so.1 2>/dev/null | head -1)
+[ -n "$STDCXX" ] || { echo "!! libstdc++.so.6 not found in $LIBSTDCXX_APK" >&2; exit 1; }
+[ -n "$GCC_S" ] || { echo "!! libgcc_s.so.1 not found in $LIBGCC_APK" >&2; exit 1; }
+cp "$STDCXX" "$ASSETS/libstdc++.so.6"
+cp "$GCC_S" "$ASSETS/libgcc_s.so.1"
+chmod 644 "$ASSETS/libstdc++.so.6" "$ASSETS/libgcc_s.so.1"
+echo "== staged libstdc++.so.6 ($(du -h "$ASSETS/libstdc++.so.6" | cut -f1)), libgcc_s.so.1 ($(du -h "$ASSETS/libgcc_s.so.1" | cut -f1))"
 
 echo "== musl loader $MUSL_LOADER_VERSION (claude's and opencode's dynamic loader)"
 curl -fsSL "https://dl-cdn.alpinelinux.org/alpine/v3.20/main/aarch64/musl-$MUSL_LOADER_VERSION.apk" -o "$WORK/musl.apk"
