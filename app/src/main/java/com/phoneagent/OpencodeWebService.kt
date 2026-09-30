@@ -72,12 +72,12 @@ class OpencodeWebService : Service() {
             )
             val pb = ProcessBuilder(args)
             if (workDir.isDirectory) pb.directory(workDir)
-            pb.environment().putAll(NodeRuntime.environment(this).toMutableMap().apply {
-                // Bun needs a writable temp dir (no /tmp on Android) and the GNU C++
-                // runtime next to the musl loader
-                put("TMPDIR", cacheDir.absolutePath)
-                put("LD_LIBRARY_PATH", NodeRuntime.pkgDir(this).absolutePath)
-            })
+            val env = NodeRuntime.environment(this).toMutableMap()
+            // Bun needs a writable temp dir (no /tmp on Android) and the GNU C++
+            // runtime next to the musl loader
+            env["TMPDIR"] = cacheDir.absolutePath
+            env["LD_LIBRARY_PATH"] = NodeRuntime.pkgDir(this).absolutePath
+            pb.environment().putAll(env)
             pb.redirectErrorStream(true)
             val p = pb.start()
             proc = p
