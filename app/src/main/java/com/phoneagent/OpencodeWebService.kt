@@ -76,7 +76,7 @@ class OpencodeWebService : Service() {
                 // Bun needs a writable temp dir (no /tmp on Android) and the GNU C++
                 // runtime next to the musl loader
                 put("TMPDIR", cacheDir.absolutePath)
-                put("LD_LIBRARY_PATH", pkgDir(this@OpencodeWebService).absolutePath)
+                put("LD_LIBRARY_PATH", NodeRuntime.pkgDir(this).absolutePath)
             })
             pb.redirectErrorStream(true)
             val p = pb.start()
