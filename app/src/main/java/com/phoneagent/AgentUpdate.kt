@@ -59,6 +59,7 @@ object AgentUpdate {
             // standalone binary agents (terminal picker)
             Info("codex", BinaryAgents.installedVersion(ctx, BinaryAgents.CODEX), BinaryAgents.latestVersion(ctx, BinaryAgents.CODEX) ?: "未知"),
             Info("claude", BinaryAgents.installedVersion(ctx, BinaryAgents.CLAUDE), BinaryAgents.latestVersion(ctx, BinaryAgents.CLAUDE) ?: "未知"),
+            Info("opencode", BinaryAgents.installedVersion(ctx, BinaryAgents.OPENCODE), BinaryAgents.latestVersion(ctx, BinaryAgents.OPENCODE) ?: "未知"),
         )
     }
 
@@ -196,6 +197,7 @@ object AgentUpdate {
         val tarball = when (agent) {
             BinaryAgents.CODEX -> "${registry(ctx)}/@openai/codex/-/codex-$version-linux-arm64.tgz"
             BinaryAgents.CLAUDE -> "${registry(ctx)}/@anthropic-ai%2fclaude-code-linux-arm64-musl/-/claude-code-linux-arm64-musl-$version.tgz"
+            BinaryAgents.OPENCODE -> "${registry(ctx)}/opencode-linux-arm64-musl/-/opencode-linux-arm64-musl-$version.tgz"
             else -> return false
         }
         val out = File(NodeRuntime.pkgDir(ctx), "$agent.tgz")

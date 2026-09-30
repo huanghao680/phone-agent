@@ -26,7 +26,26 @@ CC_META=$(curl -fsSL "https://registry.npmjs.org/@anthropic-ai/claude-code-linux
 CC_TARBALL=$(echo "$CC_META" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).dist.tarball))")
 curl -fsSL "$CC_TARBALL" -o "$ASSETS/claude.tgz"
 
-echo "== musl loader $MUSL_LOADER_VERSION (claude's dynamic loader)"
+echo "== opencode $OPENCODE_VERSION (opencode-linux-arm64-musl platform tarball)"
+OC_META=$(curl -fsSL "https://registry.npmjs.org/opencode-linux-arm64-musl/$OPENCODE_VERSION")
+OC_TARBALL=$(echo "$OC_META" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).dist.tarball))")
+curl -fsSL "$OC_TARBALL" -o "$ASSETS/opencode.tgz"
+
+# opencode is a Bun single-file executable: it cannot start on its own under
+# bionic (its ELF interpreter is the musl loader path) and it needs the GNU C++
+# runtime. Both come from Alpine, same build as the musl loader below.
+echo "== opencode runtimes (Alpine musl loader + libstdc++/libgcc)"
+for spec in "libstdc++:$LIBSTDCXX_APK" "libgcc:$LIBGCC_APK"; do
+  name="${spec%%:*}"; apk="${spec#*:}"
+  curl -fsSL "https://dl-cdn.alpinelinux.org/alpine/v3.20/main/aarch64/$apk" -o "$WORK/$name.apk"
+  mkdir -p "$WORK/$name"
+  tar -xzf "$WORK/$name.apk" -C "$WORK/$name" 2>/dev/null || true
+done
+cp "$WORK/libstdc++"/usr/lib/libstdc++.so.* "$ASSETS/libstdc++.so.6" 2>/dev/null
+cp "$WORK/libgcc"/usr/lib/libgcc_s.so.1 "$ASSETS/libgcc_s.so.1" 2>/dev/null
+chmod 644 "$ASSETS/libstdc++.so.6" "$ASSETS/libgcc_s.so.1" 2>/dev/null
+
+echo "== musl loader $MUSL_LOADER_VERSION (claude's and opencode's dynamic loader)"
 curl -fsSL "https://dl-cdn.alpinelinux.org/alpine/v3.20/main/aarch64/musl-$MUSL_LOADER_VERSION.apk" -o "$WORK/musl.apk"
 mkdir -p "$WORK/musl"
 tar -xzf "$WORK/musl.apk" -C "$WORK/musl" 2>/dev/null || true
@@ -49,7 +68,7 @@ chmod 755 "$ASSETS/rg"
 echo "== ripgrep staged ($(du -h "$ASSETS/rg" | cut -f1))"
 
 # version manifest the app reads for update checks
-echo "{\"codex\":\"$CODEX_VERSION\",\"claude\":\"$CLAUDE_VERSION\",\"ripgrep\":\"$RIPGREP_VERSION\"}" > "$ASSETS/versions.json"
+echo "{\"codex\":\"$CODEX_VERSION\",\"claude\":\"$CLAUDE_VERSION\",\"ripgrep\":\"$RIPGREP_VERSION\",\"opencode\":\"$OPENCODE_VERSION\"}" > "$ASSETS/versions.json"
 
 ls -la "$ASSETS"
 echo "== done"

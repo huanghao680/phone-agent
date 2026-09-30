@@ -99,6 +99,15 @@
             android:theme="@style/Theme.PhoneAgent.Terminal" />
 
         <activity
+            android:name=".OpencodeTerminalActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:label="opencode TUI"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.PhoneAgent.Terminal" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_label" />

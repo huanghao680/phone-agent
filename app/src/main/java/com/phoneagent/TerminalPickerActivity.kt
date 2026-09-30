@@ -68,12 +68,14 @@ class TerminalPickerActivity : ComponentActivity() {
                     NodeRuntime.copyPackages(this@TerminalPickerActivity)
                     BinaryAgents.ensure(this@TerminalPickerActivity, BinaryAgents.CODEX) { }
                     BinaryAgents.ensure(this@TerminalPickerActivity, BinaryAgents.CLAUDE) { }
+                    BinaryAgents.ensure(this@TerminalPickerActivity, BinaryAgents.OPENCODE) { }
                 }
             }
             binReadyTick++
         }
         val codexAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.CODEX) }
         val claudeAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.CLAUDE) }
+        val opencodeAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.OPENCODE) }
         val choices = listOf(
             Choice("zcode", "Zcode TUI", "Z.ai 的编码 Agent（内嵌 Node，自动安装）", true),
             Choice("dsh", "DeepSeek Harness TUI", "DeepSeek 官方 Harness（内嵌 Node，自动安装）", true),
@@ -90,6 +92,13 @@ class TerminalPickerActivity : ComponentActivity() {
                 if (claudeAvailable) "Anthropic 的编码 Agent（musl 二进制 + 自带 loader）"
                 else "二进制未就绪：重新打开 APP 解压运行时后再试",
                 claudeAvailable,
+            ),
+            Choice(
+                "opencode",
+                "opencode TUI",
+                if (opencodeAvailable) "开源编码 Agent（Bun 单文件 + musl loader 运行）"
+                else "二进制未就绪：重新打开 APP 解压运行时后再试",
+                opencodeAvailable,
             ),
         )
         Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
@@ -168,6 +177,7 @@ class TerminalPickerActivity : ComponentActivity() {
                 )
                 "codex" -> startActivity(Intent(this, CodexTerminalActivity::class.java))
                 "claude" -> startActivity(Intent(this, ClaudeTerminalActivity::class.java))
+                "opencode" -> startActivity(Intent(this, OpencodeTerminalActivity::class.java))
             }
         }
     }

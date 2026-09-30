@@ -15,6 +15,7 @@ object BinaryAgents {
 
     const val CODEX = "codex"
     const val CLAUDE = "claude"
+    const val OPENCODE = "opencode"
 
     data class Info(val name: String, val installed: String?, val latest: String) {
         val updateAvailable: Boolean get() = installed != null && installed != latest
@@ -25,6 +26,11 @@ object BinaryAgents {
     fun isReady(ctx: Context, agent: String): Boolean = when (agent) {
         CODEX -> File(pkg(ctx), "vendor/aarch64-unknown-linux-musl/bin/codex").exists()
         CLAUDE -> File(pkg(ctx), "claude").exists() && File(pkg(ctx), "ld-musl-aarch64.so.1").exists()
+        // opencode is a Bun single-file executable: it needs the musl loader and
+        // the GNU C++ runtime it was linked against (both shipped as assets)
+        OPENCODE -> File(pkg(ctx), "opencode").exists() &&
+            File(pkg(ctx), "ld-musl-aarch64.so.1").exists() &&
+            File(pkg(ctx), "libstdc++.so.6").exists()
         else -> false
     }
 
@@ -82,6 +88,13 @@ object BinaryAgents {
                                     out.outputStream().use { tar.copyTo(it, 1 shl 16) }
                                     out.setExecutable(true, false)
                                 }
+                                // opencode ships a single Bun executable; the
+                                // loader and C++ runtime come from assets
+                                OPENCODE -> if (name == "package/bin/opencode") {
+                                    val out = File(pkg(ctx), "opencode")
+                                    out.outputStream().use { tar.copyTo(it, 1 shl 16) }
+                                    out.setExecutable(true, false)
+                                }
                             }
                         }
                         entry = tar.nextEntry
@@ -104,7 +117,8 @@ object BinaryAgents {
         // version determines the family; claude publishes a separate musl pkg
         val url = when (agent) {
             CODEX -> "${Prefs.npmRegistry(ctx).trimEnd('/')}/@openai%2fcodex/${Versions.CODEX_VERSION}"
-            else -> "${Prefs.npmRegistry(ctx).trimEnd('/')}/@anthropic-ai%2fclaude-code-linux-arm64-musl/${Versions.CLAUDE_VERSION}"
+            CLAUDE -> "${Prefs.npmRegistry(ctx).trimEnd('/')}/@anthropic-ai%2fclaude-code-linux-arm64-musl/${Versions.CLAUDE_VERSION}"
+            else -> "${Prefs.npmRegistry(ctx).trimEnd('/')}/opencode-linux-arm64-musl/${Versions.OPENCODE_VERSION}"
         }
         val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
         conn.connectTimeout = 10_000

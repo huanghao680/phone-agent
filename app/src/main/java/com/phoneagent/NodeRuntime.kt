@@ -151,7 +151,11 @@ object NodeRuntime {
         }
         // codex / claude npm platform tarballs + musl loader for the terminal
         // picker (optional until fetch-terminal-extra.sh runs in CI)
-        for (name in arrayOf("codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json", "rg")) {
+        for (name in arrayOf(
+            "codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json", "rg",
+            // opencode: Bun executable + the musl loader / C++ runtime it needs
+            "opencode.tgz", "libstdc++.so.6", "libgcc_s.so.1",
+        )) {
             try {
                 ctx.assets.open("terminal-extra/$name").use { input ->
                     val out = File(pkgDir(ctx), name)

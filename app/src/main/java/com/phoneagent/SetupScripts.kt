@@ -236,6 +236,50 @@ exec "${'$'}LOADER" "${'$'}BIN"
         return write(ctx, "run-claude.sh", body)
     }
 
+    /**
+     * Interactive opencode TUI bootstrap.
+     *
+     * opencode is a Bun single-file executable: the ELF cannot start on its own
+     * here (its interpreter lives at the musl loader path, and it needs the GNU
+     * C++ runtime it was linked against), so it is launched explicitly through
+     * the bundled Alpine loader with the C++ runtime on the library path. Bun
+     * also unpacks itself into $TMPDIR, which Android does not provide.
+     */
+    fun opencodeScript(ctx: Context): File {
+        val usr = NodeRuntime.usrDir(ctx).absolutePath
+        val body = """
+#!/system/bin/sh
+# Phone-Agent: launch the opencode TUI (Bun single-file, via musl loader).
+USR='$usr'
+PKG='${NodeRuntime.pkgDir(ctx).absolutePath}'
+LOADER="${'$'}PKG/ld-musl-aarch64.so.1"
+BIN="${'$'}PKG/opencode"
+
+if [ ! -x "${'$'}LOADER" ] || [ ! -x "${'$'}BIN" ]; then
+  echo "[phone-agent] opencode 二进制缺失（当前构建未包含）。"
+  echo "[phone-agent] 按回车退出。"
+  read -r dummy
+  exit 1
+fi
+
+WORKDIR="${'$'}{PHONE_AGENT_WORKSPACE:-}"
+if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
+  echo "[phone-agent] 工作区：${'$'}WORKDIR"
+  cd "${'$'}WORKDIR"
+fi
+
+export HOME="${'$'}{HOME:-${'$'}USR/../home}"
+# Bun needs a real temp dir; Android has no /tmp and its root is read-only
+export TMPDIR="${'$'}{TMPDIR:-${'$'}USR/../cache}"
+mkdir -p "${'$'}TMPDIR"
+# GNU C++ runtime from the same Alpine build as the loader
+export LD_LIBRARY_PATH="${'$'}PKG${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
+exec "${'$'}LOADER" "${'$'}BIN"
+""".trim() + "
+"
+        return write(ctx, "run-opencode.sh", body)
+    }
+
     /** /system/bin/zcode wrapper installed by the Magisk module (root integration). */
     fun sysZcodeWrapper(): String {
         return """

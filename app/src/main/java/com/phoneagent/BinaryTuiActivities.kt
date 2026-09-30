@@ -176,3 +176,11 @@ class ClaudeTerminalActivity : BaseBinaryTuiActivity() {
     override fun binaryReady() = BinaryAgents.isReady(this, BinaryAgents.CLAUDE)
     override fun binaryName() = BinaryAgents.CLAUDE
 }
+
+/** opencode terminal (Bun single-file executable via the bundled musl loader). */
+class OpencodeTerminalActivity : BaseBinaryTuiActivity() {
+    override val agentName = "opencode"
+    override fun scriptFile() = SetupScripts.opencodeScript(this)
+    override fun binaryReady() = BinaryAgents.isReady(this, BinaryAgents.OPENCODE)
+    override fun binaryName() = BinaryAgents.OPENCODE
+}
