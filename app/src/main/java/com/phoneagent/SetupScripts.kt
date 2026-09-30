@@ -269,11 +269,15 @@ if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
 fi
 
 export HOME="${'$'}{HOME:-${'$'}USR/../home}"
-# Bun needs a real temp dir; Android has no /tmp and its root is read-only
-export TMPDIR="${'$'}{TMPDIR:-${'$'}USR/../cache}"
-mkdir -p "${'$'}TMPDIR"
-# GNU C++ runtime from the same Alpine build as the loader
-export LD_LIBRARY_PATH="${'$'}PKG${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
+# Bun needs a real temp dir; Android has no /tmp and its root is read-only.
+# Pinned to the app cache: an inherited /data/local/tmp would fail EACCES.
+TMPDIR="${'$'}USR/../cache"
+export TMPDIR
+mkdir -p "${'$'}TMPDIR" 2>/dev/null || true
+# GNU C++ runtime from the same Alpine build as the loader, PLUS the runtime
+# prefix so the bundled shell tools (mkdir and friends) keep working
+export LD_LIBRARY_PATH="${'$'}PKG:${'$'}USR/lib${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
+export PATH="${'$'}USR/bin:${'$'}PATH"
 exec "${'$'}LOADER" "${'$'}BIN"
 """.trim() + "\n"
         return write(ctx, "run-opencode.sh", body)
