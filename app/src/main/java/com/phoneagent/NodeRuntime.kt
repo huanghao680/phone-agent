@@ -122,28 +122,26 @@ object NodeRuntime {
     fun copyPackages(ctx: Context) {
         ensureSandboxTools(ctx)
         for (name in arrayOf(Versions.ZCODE_TGZ, Versions.DSH_TGZ)) {
-            val out = File(pkgDir(ctx), name)
-            ctx.assets.open("packages/$name").use { input ->
-                FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
-            }
+            copyAssetIfChanged(ctx, "packages/$name", File(pkgDir(ctx), name))
         }
         // CI-built node-pty android-arm64 binding (optional until fetch-native.sh runs)
         try {
-            ctx.assets.open("native/node-pty/pty.node").use { input ->
-                val dir = File(pkgDir(ctx), "node-pty-prebuild").apply { mkdirs() }
-                FileOutputStream(File(dir, "pty.node")).use { input.copyTo(it, 1 shl 16) }
-            }
+            copyAssetIfChanged(ctx, "native/node-pty/pty.node", File(pkgDir(ctx), "node-pty-prebuild/pty.node"))
         } catch (_: IOException) {
             // asset absent: bootstrap continues without the dsh native binding
         }
         // dsh Android patch entry point + its Node-based patcher
         for (name in arrayOf("patch-dsh-flock.sh", "patch-dsh-android.mjs")) {
             try {
+                val dir = File(usrDir(ctx), "share/phone-agent").apply { mkdirs() }
+                val out = File(dir, name)
+                val sizeBefore = if (out.exists()) out.length() else -1L
                 ctx.assets.open("scripts/$name").use { input ->
-                    val dir = File(usrDir(ctx), "share/phone-agent").apply { mkdirs() }
-                    val out = File(dir, name)
-                    FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
-                    out.setExecutable(true, false)
+                    val expected = input.available().toLong()
+                    if (sizeBefore != expected) {
+                        FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
+                        out.setExecutable(true, false)
+                    }
                 }
             } catch (_: IOException) {
                 // asset absent: matching dsh patch skipped
@@ -158,10 +156,7 @@ object NodeRuntime {
             "opencode.tgz", "libstdc++.so.6", "libgcc_s.so.1", "httpproxy.cjs",
         )) {
             try {
-                ctx.assets.open("terminal-extra/$name").use { input ->
-                    val out = File(pkgDir(ctx), name)
-                    FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
-                }
+                copyAssetIfChanged(ctx, "terminal-extra/$name", File(pkgDir(ctx), name))
             } catch (_: IOException) {
                 // asset absent: picker shows the entries as unavailable
             }
@@ -203,6 +198,25 @@ object NodeRuntime {
         File(usr, "share/phone-agent/sandbox-mode").writeText(mode)
         // pnpm install needs the network; keep it off the boot path
         kotlin.concurrent.thread(name = "pnpm-install") { ensurePnpm(ctx) }
+    }
+
+    /**
+     * Copies an asset to [out] only when the destination is missing or has a
+     * different size. The full copy set is ~350 MB (agent tarballs included);
+     * unconditional re-copying on every service start used to push the first
+     * web UI readiness past its timeout.
+     */
+    private fun copyAssetIfChanged(ctx: Context, assetPath: String, out: File) {
+        try {
+            ctx.assets.open(assetPath).use { input ->
+                val expected = input.available().toLong()
+                if (out.exists() && out.length() == expected) return
+                out.parentFile?.mkdirs()
+                FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
+            }
+        } catch (_: IOException) {
+            // asset absent: caller decides whether that is fatal
+        }
     }
 
     /**
