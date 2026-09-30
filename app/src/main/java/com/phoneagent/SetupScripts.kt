@@ -278,6 +278,23 @@ mkdir -p "${'$'}TMPDIR" 2>/dev/null || true
 # prefix so the bundled shell tools (mkdir and friends) keep working
 export LD_LIBRARY_PATH="${'$'}PKG:${'$'}USR/lib${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
 export PATH="${'$'}USR/bin:${'$'}PATH"
+
+# DNS proxy: Bun's resolver cannot read Android's DNS config (no
+# /etc/resolv.conf), so every hostname lookup inside opencode fails. Node's
+# resolver works, so all of Bun's network goes through this local forward
+# proxy (CONNECT tunnel + plain HTTP) which resolves names via Node.
+PROXY_JS="${'$'}USR/share/phone-agent/httpproxy.cjs"
+PROXY_PORT=8118
+if [ -f "${'$'}PROXY_JS" ]; then
+  if ! "${'$'}NODE" -e "const net=require('net');const s=net.connect(${'$'}PROXY_PORT,'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1))" 2>/dev/null; then
+    setsid "${'$'}NODE" "${'$'}PROXY_JS" >/dev/null 2>&1 &
+    sleep 1
+  fi
+  export HTTP_PROXY="http://127.0.0.1:${'$'}PROXY_PORT"
+  export HTTPS_PROXY="http://127.0.0.1:${'$'}PROXY_PORT"
+  export NO_PROXY="127.0.0.1,localhost"
+fi
+
 exec "${'$'}LOADER" "${'$'}BIN" "${'$'}@"
 """.trim() + "\n"
         return write(ctx, "run-opencode.sh", body)

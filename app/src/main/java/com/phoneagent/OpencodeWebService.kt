@@ -77,6 +77,12 @@ class OpencodeWebService : Service() {
             // runtime next to the musl loader
             env["TMPDIR"] = cacheDir.absolutePath
             env["LD_LIBRARY_PATH"] = NodeRuntime.pkgDir(this).absolutePath
+            // Bun's resolver cannot read Android's DNS config; route its
+            // network through the local Node forward proxy
+            val (proxyUrl, _) = NodeRuntime.ensureDnsProxy(this)
+            env["HTTP_PROXY"] = proxyUrl
+            env["HTTPS_PROXY"] = proxyUrl
+            env["NO_PROXY"] = "127.0.0.1,localhost"
             pb.environment().putAll(env)
             pb.redirectErrorStream(true)
             val p = pb.start()

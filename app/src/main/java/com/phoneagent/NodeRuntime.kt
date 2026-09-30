@@ -153,8 +153,9 @@ object NodeRuntime {
         // picker (optional until fetch-terminal-extra.sh runs in CI)
         for (name in arrayOf(
             "codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json", "rg",
-            // opencode: Bun executable + the musl loader / C++ runtime it needs
-            "opencode.tgz", "libstdc++.so.6", "libgcc_s.so.1",
+            // opencode: Bun executable + the musl loader / C++ runtime it needs,
+            // plus the DNS proxy that routes Bun's broken resolver through Node
+            "opencode.tgz", "libstdc++.so.6", "libgcc_s.so.1", "httpproxy.cjs",
         )) {
             try {
                 ctx.assets.open("terminal-extra/$name").use { input ->
@@ -267,6 +268,41 @@ object NodeRuntime {
                 }
             }
         }
+    }
+
+    /**
+     * Ensures the local DNS proxy (usr/share/phone-agent/httpproxy.cjs) is
+     * staged and running, and returns the proxy env for a process whose runtime
+     * (Bun) cannot resolve names on Android. Safe to call repeatedly.
+     */
+    fun ensureDnsProxy(ctx: Context): Pair<String, Int> {
+        val usr = usrDir(ctx)
+        val proxyJs = File(usr, "share/phone-agent/httpproxy.cjs")
+        if (proxyJs.exists()) {
+            val listening = try {
+                val pb = ProcessBuilder(
+                    File(usr, "bin/node").absolutePath, "-e",
+                    "const net=require('net');const s=net.connect(8118,'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1))",
+                )
+                pb.redirectErrorStream(true)
+                pb.start().waitFor() == 0
+            } catch (_: Exception) {
+                false
+            }
+            if (!listening) {
+                try {
+                    ProcessBuilder(
+                        File(usr, "bin/node").absolutePath, proxyJs.absolutePath,
+                    ).apply {
+                        environment().putAll(environment(ctx))
+                        redirectErrorStream(true)
+                    }.start()
+                } catch (_: Exception) {
+                    // the caller surfaces the failure through its own probe
+                }
+            }
+        }
+        return "http://127.0.0.1:8118" to 8118
     }
 
     fun environment(ctx: Context, extra: Map<String, String> = emptyMap()): Map<String, String> {
