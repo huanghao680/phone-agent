@@ -121,6 +121,16 @@ object NodeRuntime {
     /** Copies the bundled CLI tarballs from APK assets to a real path npm can read. */
     fun copyPackages(ctx: Context) {
         ensureSandboxTools(ctx)
+        // Gzip re-packing changes file sizes on every CI build, so size is not a
+        // usable change signal: gate the whole ~350MB staging set on the
+        // component versions instead. Copying happens once per version bump.
+        val key = listOf(
+            Versions.ZCODE, Versions.DSH, Versions.CODEX_VERSION, Versions.CLAUDE_VERSION,
+            Versions.OPENCODE_VERSION, Versions.RIPGREP_VERSION, Versions.PNPM_VERSION,
+            Versions.RUNTIME,
+        ).joinToString("|")
+        val keyFile = File(pkgDir(ctx), ".staged-key")
+        if (keyFile.exists() && keyFile.readText().trim() == key) return
         for (name in arrayOf(Versions.ZCODE_TGZ, Versions.DSH_TGZ)) {
             copyAssetIfChanged(ctx, "packages/$name", File(pkgDir(ctx), name))
         }
@@ -161,6 +171,7 @@ object NodeRuntime {
                 // asset absent: picker shows the entries as unavailable
             }
         }
+        keyFile.writeText(key)
     }
 
     /**
