@@ -304,24 +304,31 @@ object NodeRuntime {
         val usr = usrDir(ctx)
         val proxyJs = File(usr, "share/phone-agent/httpproxy.cjs")
         if (proxyJs.exists()) {
+            // node is dynamically linked: both the probe and the daemon need
+            // the runtime prefix on the library path, and a caller may have set
+            // LD_LIBRARY_PATH to something narrower (the opencode web service
+            // sets it to the C++ runtime dir for Bun)
+            val pbEnv: (ProcessBuilder) -> Unit = { pb ->
+                pb.environment()["LD_LIBRARY_PATH"] = usr.absolutePath + "/lib"
+                pb.environment()["HOME"] = homeDir(ctx).absolutePath
+                pb.environment()["TMPDIR"] = File(usr.parentFile, "cache").absolutePath
+                pb.redirectErrorStream(true)
+            }
             val listening = try {
                 val pb = ProcessBuilder(
                     File(usr, "bin/node").absolutePath, "-e",
                     "const net=require('net');const s=net.connect(8118,'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1))",
                 )
-                pb.redirectErrorStream(true)
+                pbEnv(pb)
                 pb.start().waitFor() == 0
             } catch (_: Exception) {
                 false
             }
             if (!listening) {
                 try {
-                    ProcessBuilder(
-                        File(usr, "bin/node").absolutePath, proxyJs.absolutePath,
-                    ).apply {
-                        environment().putAll(environment(ctx))
-                        redirectErrorStream(true)
-                    }.start()
+                    val pb = ProcessBuilder(File(usr, "bin/node").absolutePath, proxyJs.absolutePath)
+                    pbEnv(pb)
+                    pb.start()
                 } catch (_: Exception) {
                     // the caller surfaces the failure through its own probe
                 }
