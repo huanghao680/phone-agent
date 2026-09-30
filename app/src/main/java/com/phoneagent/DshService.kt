@@ -114,9 +114,14 @@ class DshService : Service() {
                 }
             }
             notify("等待 DeepSeek Harness 就绪…")
+            // A verifying boot must also survive a version probe: a tree whose
+            // entry file parses is not proof the release is usable (the first
+            // A/B test with a faked version number booted fine and would have
+            // been accepted). Cheap, and it fails the boot before the long wait.
+            val versionOk = if (verifying) probeEntryVersion() else true
             // The port opens well before the web profile finishes booting; the
             // real readiness signal is the authenticated URL printed on stdout.
-            val ready = awaitTokenUrl(timeoutMs = 150_000)
+            val ready = versionOk && awaitTokenUrl(timeoutMs = 150_000)
             if (ready) {
                 AgentSlots.markBootOk(this, AgentSlots.DSH)
                 DshState.serverReady = true
@@ -138,6 +143,25 @@ class DshService : Service() {
             DshState.lastError = e.message ?: e.javaClass.simpleName
             notify("dsh 启动异常：${DshState.lastError}")
         }
+    }
+
+    /** Runs `<node> <entry> --version`; false when the candidate cannot start. */
+    private fun probeEntryVersion(): Boolean = try {
+        val pb = ProcessBuilder(
+            NodeRuntime.nodeBin(this).absolutePath,
+            NodeRuntime.dshEntryJs(this).absolutePath,
+            "--version",
+        )
+        pb.environment().putAll(NodeRuntime.environment(this))
+        pb.redirectErrorStream(true)
+        val p = pb.start()
+        p.inputStream.bufferedReader().forEachLine { appendLog("[verify] $it") }
+        val ok = p.waitFor() == 0
+        if (!ok) appendLog("[verify] 版本探测失败（退出码 ${p.exitValue()}），判定本次验证启动失败")
+        ok
+    } catch (e: Exception) {
+        appendLog("[verify] 版本探测异常：${e.message}")
+        false
     }
 
     private fun awaitTokenUrl(timeoutMs: Long): Boolean {

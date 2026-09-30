@@ -2,7 +2,7 @@
 
 把 [Zcode](https://github.com/zai-org/ZCode) 与 [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 装进安卓手机本机运行的**独立 APP**——不依赖 Termux 应用，root 可选。
 
-> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.24**（versionCode 41），dsh **0.2.0-rc.2**。
+> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.26**（versionCode 43），dsh **0.2.0-rc.2**。
 
 三个桌面图标：
 
@@ -133,6 +133,16 @@ workspace 外写入   → 拒绝（Permission denied；真实文件系统无残�
 - **dsh 打不开**：设置页填 DeepSeek API Key；看 `cache/dsh.log`（App 私有目录）。
 - **`read_image` 或 `glob`/`grep` 失效**：多半是 agent 自更新把补丁冲掉了——重开一次 App（或跑一次设置页的更新）会重跑补丁器；日志里会有 `[phone-agent] …patched` 记录。
 - **通知不显示**：Android 13+ 在系统设置里手动允许通知（不影响功能）。
+
+## Agent 更新的 A/B 槽位
+
+zcode / dsh 的更新与 Android 系统更新同一套契约（真机验证过切换与回滚）：
+
+- 包装在 `files/agents/<pkg>/{a,b}` 两个槽位，用 `usr/lib/node_modules/<pkg>` 符号链接指向现役槽——入口路径、启动脚本、补丁器、包装器全都不变。
+- **更新装入备用槽，下次启动切换**；切换后的那次启动是“验证启动”，失败则**自动回滚**到上一版本并重试一次。
+- 设置页的 Agent 更新区有 **回滚** 按钮（有备用版本时才出现）。
+- **手动更新不会被降级**：APK 内置版本只在「现役版本缺失或更旧」时才重装，手动更新到更新版本后不会被钉回内置版。
+- **Agent 无法破坏机制**：工作区与 `~/.dsh/` 会种入 `AGENTS.md`（两个 CLI 都自动读入上下文），写明环境事实与更新政策（禁止 `npm i -g` 之类全局安装）；启动时还有**槽位完整性校验**——若现役树版本与记录不符（会话内被改动），会采用实际版本并重打 Android 补丁。
 
 ## dsh 插件系统（第三方插件实测可用）
 
