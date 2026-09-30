@@ -74,7 +74,7 @@ object AgentSlots {
     fun migrateLegacy(ctx: Context, pkg: String) {
         if (read(ctx, pkg) != null) return
         val legacy = legacyDir(ctx, pkg)
-        if (!legacy.exists() || legacy.isSymbolicLink) return
+        if (!legacy.exists() || java.nio.file.Files.isSymbolicLink(legacy.toPath())) return
         val dest = slotPackageDir(ctx, pkg, "a")
         dest.parentFile?.mkdirs()
         try {
@@ -95,7 +95,8 @@ object AgentSlots {
         val link = legacyDir(ctx, pkg)
         val target = slotPackageDir(ctx, pkg, s.active)
         link.parentFile?.mkdirs()
-        if (link.exists() && !link.isDirectory || link.isSymbolicLink) link.delete()
+        val linkIsSymlink = java.nio.file.Files.isSymbolicLink(link.toPath())
+        if ((link.exists() && !link.isDirectory) || linkIsSymlink) link.delete()
         if (!link.exists()) {
             runCatching {
                 java.nio.file.Files.createSymbolicLink(link.toPath(), target.toPath())

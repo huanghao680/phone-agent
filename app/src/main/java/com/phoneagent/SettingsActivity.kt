@@ -167,8 +167,7 @@ class SettingsActivity : ComponentActivity() {
                                 UpdateRow(row.first, enabled = true) {
                                     threadRun {
                                         val log = StringBuilder()
-                                        AgentUpdate.rollback(this@SettingsActivity, row.second) { line -> log.append(line).append('
-') }
+                                        AgentUpdate.rollback(this@SettingsActivity, row.second) { line -> log.append(line).append('\n') }
                                         ui { updateStatus = log.toString().trim() }
                                     }
                                 }
