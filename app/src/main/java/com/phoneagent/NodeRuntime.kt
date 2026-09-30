@@ -238,6 +238,33 @@ object NodeRuntime {
         }
     }
 
+    /**
+     * Seeds the must-read environment description (AGENTS.md) that both CLIs
+     * auto-load into context: ~/.dsh/AGENTS.md is dsh's global instructions
+     * file, the workspace root AGENTS.md is read by zcode (and dsh). Only
+     * written when missing — the user may edit their copy.
+     */
+    fun seedAgentInstructions(ctx: Context) {
+        val body = try {
+            ctx.assets.open("agents/AGENTS.md").bufferedReader().use { it.readText() }
+        } catch (_: IOException) {
+            return
+        }
+        for (target in listOf(
+            File(homeDir(ctx), ".dsh/AGENTS.md"),
+            File(homeDir(ctx), "AGENTS.md"),
+        )) {
+            if (!target.exists()) {
+                target.parentFile?.mkdirs()
+                try {
+                    target.writeText(body)
+                } catch (_: IOException) {
+                    // read-only home is not a thing here; ignore anyway
+                }
+            }
+        }
+    }
+
     fun environment(ctx: Context, extra: Map<String, String> = emptyMap()): Map<String, String> {
         val usr = usrDir(ctx).absolutePath
         val env = mutableMapOf(

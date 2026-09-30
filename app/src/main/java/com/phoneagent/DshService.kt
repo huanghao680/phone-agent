@@ -47,7 +47,9 @@ class DshService : Service() {
         mgr.notify(Notifications.ID_DSH, Notifications.build(this, text))
     }
 
-    private fun boot() {
+    private fun boot() = boot(retryAfterRevert = false)
+
+    private fun boot(retryAfterRevert: Boolean) {
         try {
             if (!NodeRuntime.isRuntimeExtracted(this)) {
                 notify("正在解压 Node 运行时…")
@@ -57,6 +59,8 @@ class DshService : Service() {
             // danger-full-access, but headless/CLI profiles spawned from
             // sessions inherit this runtime and need the sandbox staged
             NodeRuntime.ensureSandboxTools(this)
+            // must-read environment/update policy for agent sessions
+            NodeRuntime.seedAgentInstructions(this)
             // storage access facts, measured from this process (the app's own
             // mount namespace — an adb shell session sees something different)
             try {
@@ -76,6 +80,12 @@ class DshService : Service() {
             // the package tree may have just been replaced: re-stage the shim
             // and rewrite the sandbox-mode file for the new version
             NodeRuntime.ensureSandboxTools(this)
+            // A/B: a pending update becomes active for THIS boot; if the boot
+            // fails below, revertFailedBoot swaps back and we retry once
+            val verifying = AgentSlots.beginBoot(this, AgentSlots.DSH) { line -> appendLog(line) } > 0
+            // an agent may have rewritten the tree from inside a session: adopt
+            // the real version and re-apply the Android patches
+            AgentSlots.reconcile(this, AgentSlots.DSH) { line -> appendLog(line) }
             // dsh uses the invoking directory as its workspace root
             val workDir = File(
                 StorageAccess.defaultWorkspace(this),
@@ -108,12 +118,21 @@ class DshService : Service() {
             // real readiness signal is the authenticated URL printed on stdout.
             val ready = awaitTokenUrl(timeoutMs = 150_000)
             if (ready) {
+                AgentSlots.markBootOk(this, AgentSlots.DSH)
                 DshState.serverReady = true
                 notify("DeepSeek Harness 运行中")
             } else {
                 DshState.lastError = "dsh 未在 150 秒内就绪，详见 cache/dsh.log"
                 notify(DshState.lastError!!)
                 p.destroy()
+                // A/B rollback: a verifying boot that fails reverts to the
+                // previous tree and retries exactly once
+                if (verifying && !retryAfterRevert &&
+                    AgentSlots.revertFailedBoot(this, AgentSlots.DSH) { line -> appendLog(line) }
+                ) {
+                    DshState.lastError = null
+                    boot(retryAfterRevert = true)
+                }
             }
         } catch (e: Exception) {
             DshState.lastError = e.message ?: e.javaClass.simpleName

@@ -16,4 +16,9 @@ if [ ! -f "$JS" ]; then
   exit 0
 fi
 
+# DSH_ROOT targets a specific slot tree (standby-slot updates are patched
+# before they become active); defaults to the active install.
+DSH_ROOT="${DSH_ROOT:-$USR/lib/node_modules/@deepseek-ai/dsh}"
+export DSH_ROOT
+
 LD_LIBRARY_PATH="$USR/lib" "$USR/bin/node" "$JS" "$USR"

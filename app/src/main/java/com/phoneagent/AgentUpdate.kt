@@ -98,9 +98,10 @@ object AgentUpdate {
     }
 
     /**
-     * Reinstalls [tgzFile] over the installed tree (npm keeps the old files
-     * until the new install completes, so a failed update leaves the old CLI
-     * usable). Clears the version marker so the bootstrap re-injects pty/sharp.
+     * Installs [tgzFile] into the standby slot (A/B). The new version becomes
+     * active on the next app/agent boot; if that boot fails, the previous tree
+     * is restored automatically. zcode activates immediately (no boot to
+     * verify against); dsh waits for the next DshService start.
      */
     fun applyUpdate(
         ctx: Context,
@@ -108,43 +109,28 @@ object AgentUpdate {
         tgzFile: File,
         onLine: (String) -> Unit,
     ): Boolean {
-        val usr = NodeRuntime.usrDir(ctx)
         val node = NodeRuntime.nodeBin(ctx)
         val npm = NodeRuntime.npmCliJs(ctx)
         val ignoreScripts = pkg != "zcode-app-cli"
-        val args = mutableListOf(
-            node.absolutePath, npm.absolutePath,
-            "install", "-g", "--prefix", usr.absolutePath,
-        )
-        if (ignoreScripts) args.add("--ignore-scripts")
-        args.add("file:${tgzFile.absolutePath}")
-        val pb = ProcessBuilder(args)
-        pb.environment().putAll(NodeRuntime.environment(ctx))
-        pb.redirectErrorStream(true)
-        onLine("[update] 安装 $pkg ...")
-        return try {
-            val p = pb.start()
-            p.inputStream.bufferedReader().forEachLine(onLine)
-            val code = p.waitFor()
-            if (code == 0) {
-                clearMarkers(ctx, pkg)
-                // re-inject android-specific pieces after a scripted install:
-                // the package tree was replaced, so every patch is gone
-                if (pkg == "@deepseek-ai/dsh") {
-                    injectPty(ctx, onLine)
-                    sharpWasm(ctx, node, npm, usr, onLine)
-                }
-                runAndroidPatches(ctx, onLine)
-                onLine("[update] $pkg 更新完成 ✅")
-                true
-            } else {
-                onLine("[update] $pkg 安装失败（退出码 $code），旧版本仍可用")
-                false
+        val short = if (pkg == "zcode-app-cli") AgentSlots.ZCODE else AgentSlots.DSH
+        clearMarkers(ctx, pkg)
+        val version = AgentSlots.installUpdate(ctx, short, tgzFile, node, npm, ignoreScripts, onLine)
+            ?: run {
+                onLine("[update] $pkg 更新失败，当前版本仍可用")
+                return false
             }
-        } catch (e: Exception) {
-            onLine("[update] $pkg 更新异常：${e.message}")
-            false
+        if (pkg == "@deepseek-ai/dsh") {
+            // patch the standby tree BEFORE it becomes active, so the
+            // verification boot runs the fully adapted build
+            val dshRoot = AgentSlots.read(ctx, short)?.let { s ->
+                File(AgentSlots.slotPrefix(ctx, short, s.standby ?: return@let null), "lib/node_modules/@deepseek-ai/dsh")
+            }
+            injectPty(ctx, onLine, dshRoot)
+            sharpWasm(ctx, node, npm, NodeRuntime.usrDir(ctx), onLine, dshRoot)
+            runAndroidPatches(ctx, onLine, dshRoot)
         }
+        onLine("[update] $pkg $version 更新完成 ✅")
+        return true
     }
 
     /** Markers carry the packaged version, so match by prefix. */
@@ -160,14 +146,14 @@ object AgentUpdate {
      * replaces the package files, so without this the flock stub, the link()
      * fallback, the sandbox platform chain and the ripgrep shim are all lost.
      */
-    private fun runAndroidPatches(ctx: Context, onLine: (String) -> Unit) =
-        Bootstrap.applyAndroidPatches(ctx, onLine)
+    private fun runAndroidPatches(ctx: Context, onLine: (String) -> Unit, dshRoot: File? = null) =
+        Bootstrap.applyAndroidPatches(ctx, onLine, dshRoot)
 
-    private fun injectPty(ctx: Context, onLine: (String) -> Unit) {
+    private fun injectPty(ctx: Context, onLine: (String) -> Unit, dshRoot: File? = null) {
         val src = File(NodeRuntime.pkgDir(ctx), "node-pty-prebuild/pty.node")
         val dir = File(
-            NodeRuntime.usrDir(ctx),
-            "lib/node_modules/@deepseek-ai/dsh/node_modules/node-pty/prebuilds/android-arm64",
+            dshRoot ?: File(NodeRuntime.usrDir(ctx), "lib/node_modules/@deepseek-ai/dsh"),
+            "node_modules/node-pty/prebuilds/android-arm64",
         )
         if (src.exists()) {
             dir.mkdirs()
@@ -176,9 +162,9 @@ object AgentUpdate {
         }
     }
 
-    private fun sharpWasm(ctx: Context, node: File, npm: File, usr: File, onLine: (String) -> Unit) {
+    private fun sharpWasm(ctx: Context, node: File, npm: File, usr: File, onLine: (String) -> Unit, dshRoot: File? = null) {
         try {
-            val sharpDir = File(usr, "lib/node_modules/@deepseek-ai/dsh/node_modules/sharp")
+            val sharpDir = File(dshRoot ?: File(usr, "lib/node_modules/@deepseek-ai/dsh"), "node_modules/sharp")
             val sharpPkg = File(sharpDir, "package.json")
             if (!sharpPkg.exists()) return
             val ver = org.json.JSONObject(sharpPkg.readText()).getString("version")
@@ -197,6 +183,12 @@ object AgentUpdate {
         } catch (e: Exception) {
             onLine("[update] sharp-wasm32 安装失败（图片功能受限）：${e.message}")
         }
+    }
+
+    /** Manual rollback from Settings: swap back to the standby slot tree. */
+    fun rollback(ctx: Context, pkg: String, onLine: (String) -> Unit): Boolean {
+        val short = if (pkg == "zcode-app-cli") AgentSlots.ZCODE else AgentSlots.DSH
+        return AgentSlots.rollback(ctx, short, onLine)
     }
 
     /** Binary agents (codex/claude): download platform tgz to pkg and re-extract. */

@@ -61,6 +61,14 @@ class ZcodeTerminalActivity : ComponentActivity() {
                 }
                 // the terminal bootstrap script installs from these tarballs
                 NodeRuntime.copyPackages(this)
+                // A/B slots + the must-read environment description; both are
+                // no-ops once present, and keep the TUI path consistent with
+                // the service path
+                NodeRuntime.seedAgentInstructions(this)
+                AgentSlots.migrateLegacy(this, AgentSlots.ZCODE)
+                AgentSlots.migrateLegacy(this, AgentSlots.DSH)
+                AgentSlots.reconcile(this, AgentSlots.ZCODE) { }
+                AgentSlots.reconcile(this, AgentSlots.DSH) { }
                 // Android 11+ blocks link(); seed config via rename so the CLI
                 // never has to create it with a hard link
                 ZcodeConfig.seed(this)

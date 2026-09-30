@@ -29,7 +29,10 @@ if (!USR) {
   process.exit(2);
 }
 
-const DSH_NM = join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules');
+// DSH_ROOT targets a specific slot tree (standby-slot updates are patched
+// before they become active); it defaults to the active install.
+const DSH_ROOT = process.env.DSH_ROOT || join(USR, 'lib/node_modules/@deepseek-ai/dsh');
+const DSH_NM = join(DSH_ROOT, 'node_modules');
 const DSH_MOD = join(DSH_NM, '@deepseek-ai');
 // npm may hoist a dependency into any of these trees, and not every dsh
 // dependency is scoped, so search every plausible node_modules root
@@ -179,7 +182,7 @@ export async function tryLockExclusive(fd) {
   ];
   const src = candidates.find((p) => existsSync(p));
   const dirs = [
-    join(USR, 'lib/node_modules/@deepseek-ai/dsh/node_modules/@vscode/ripgrep-android-arm64'),
+    join(DSH_ROOT, 'node_modules/@vscode/ripgrep-android-arm64'),
     // profile-hosted copies of @vscode/ripgrep resolve their platform package
     // next to themselves, so the shim has to exist there too when not symlinked
     join(process.env.HOME || '/data/user/0/com.phoneagent/files/home', '.dsh/profiles/node_modules/@vscode/ripgrep-android-arm64'),

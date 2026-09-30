@@ -52,6 +52,7 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
             thread(name = "$agentName-extract") {
                 if (!NodeRuntime.isRuntimeExtracted(this)) NodeRuntime.extractRuntime(this)
                 NodeRuntime.copyPackages(this)
+                NodeRuntime.seedAgentInstructions(this)
                 ZcodeConfig.seed(this)
                 runOnUiThread {
                     loading.visibility = View.GONE

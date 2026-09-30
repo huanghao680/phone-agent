@@ -21,12 +21,16 @@ object Bootstrap {
      * True when the packaged CLI version differs from what is on disk — the
      * entry file merely existing is not enough, or a version bump shipped in a
      * new APK would never reach an already-installed device.
+     *
+     * A manual update to a NEWER version wins over the APK-pinned one: the
+     * pinned reinstall only fires when the active tree is missing or OLDER
+     * than the packaged version, never as a downgrade.
      */
     fun zcodeNeedsInstall(ctx: Context): Boolean =
-        installedVersion(File(NodeRuntime.usrDir(ctx), tgzToNodeModulesPath(Versions.ZCODE_TGZ))) != Versions.ZCODE
+        AgentSlots.activeNeedsPinned(ctx, AgentSlots.ZCODE, Versions.ZCODE)
 
     fun dshNeedsInstall(ctx: Context): Boolean =
-        installedVersion(File(NodeRuntime.usrDir(ctx), tgzToNodeModulesPath(Versions.DSH_TGZ))) != Versions.DSH
+        AgentSlots.activeNeedsPinned(ctx, AgentSlots.DSH, Versions.DSH)
 
     /** Blocking; call from a worker thread. Streams npm output lines to [onLine]. */
     fun install(ctx: Context, onLine: (String) -> Unit): Boolean {
@@ -39,9 +43,9 @@ object Bootstrap {
             return false
         }
 
-        val zcodeOk = npmInstall(ctx, node, npm, usr, Versions.ZCODE_TGZ, Versions.ZCODE, ignoreScripts = false, onLine = onLine)
+        val zcodeOk = npmInstall(ctx, node, npm, usr, AgentSlots.ZCODE, Versions.ZCODE_TGZ, Versions.ZCODE, ignoreScripts = false, onLine = onLine)
         if (zcodeOk) marker(ctx, "zcode").writeText("ok")
-        val dshOk = npmInstall(ctx, node, npm, usr, Versions.DSH_TGZ, Versions.DSH, ignoreScripts = true, onLine = onLine)
+        val dshOk = npmInstall(ctx, node, npm, usr, AgentSlots.DSH, Versions.DSH_TGZ, Versions.DSH, ignoreScripts = true, onLine = onLine)
         if (dshOk) marker(ctx, "dsh").writeText("ok")
         if (dshOk) {
             injectPtyPrebuild(ctx, onLine)
@@ -58,7 +62,7 @@ object Bootstrap {
      * tolerance, ripgrep shim and shebang prefixes. Every (re)install replaces
      * those files, so this runs after each install and self-update.
      */
-    fun applyAndroidPatches(ctx: Context, onLine: (String) -> Unit) {
+    fun applyAndroidPatches(ctx: Context, onLine: (String) -> Unit, dshRoot: File? = null) {
         val script = File(NodeRuntime.usrDir(ctx), "share/phone-agent/patch-dsh-flock.sh")
         if (!script.exists()) {
             onLine("[phone-agent] 未找到补丁脚本，跳过 Android 适配")
@@ -67,6 +71,7 @@ object Bootstrap {
         try {
             val pb = ProcessBuilder("/system/bin/sh", script.absolutePath)
             pb.environment().putAll(NodeRuntime.environment(ctx))
+            dshRoot?.let { pb.environment()["DSH_ROOT"] = it.absolutePath }
             pb.redirectErrorStream(true)
             val p = pb.start()
             p.inputStream.bufferedReader().forEachLine(onLine)
@@ -79,17 +84,27 @@ object Bootstrap {
     private fun marker(ctx: Context, name: String): File =
         File(NodeRuntime.usrDir(ctx), ".cli-installed-$name")
 
+    /**
+     * Installs the packaged tarball into the ACTIVE slot of [pkg] (or into the
+     * legacy usr layout when slots have never been used). Only fires when the
+     * active tree is missing or OLDER than the packaged version — a manual
+     * update to a newer version is never downgraded by the pinned reinstall.
+     */
     private fun npmInstall(
         ctx: Context,
         node: File,
         npm: File,
         usr: File,
+        pkg: String,
         tgz: String,
         wantVersion: String,
         ignoreScripts: Boolean,
         onLine: (String) -> Unit,
     ): Boolean {
-        val manifest = File(usr, tgzToNodeModulesPath(tgz))
+        if (!AgentSlots.activeNeedsPinned(ctx, pkg, wantVersion)) return true
+        AgentSlots.migrateLegacy(ctx, pkg)
+        val slotPrefix = AgentSlots.slotPrefix(ctx, pkg, AgentSlots.read(ctx, pkg)?.active ?: "a")
+        val manifest = File(AgentSlots.legacyDir(ctx, pkg), "package.json")
         // Reinstall when the staged tarball is newer than what is on disk: the
         // entry file existing is not enough, or a packaged version bump would
         // never reach an already-installed device.
@@ -98,7 +113,7 @@ object Bootstrap {
         if (installed != null) onLine("[phone-agent] 组件更新 $installed -> $wantVersion（$tgz）")
         val args = mutableListOf(
             node.absolutePath, npm.absolutePath,
-            "install", "-g", "--prefix", usr.absolutePath,
+            "install", "-g", "--prefix", slotPrefix.absolutePath,
         )
         if (ignoreScripts) args.add("--ignore-scripts")
         args.add("file:${File(NodeRuntime.pkgDir(ctx), tgz).absolutePath}")
@@ -110,16 +125,22 @@ object Bootstrap {
             p.inputStream.bufferedReader().forEachLine(onLine)
             val code = p.waitFor()
             if (code != 0) onLine("[phone-agent] npm 退出码 $code（$tgz）")
+            if (code == 0) {
+                // record the slot state (first install creates it) and expose
+                // the tree through the npm-global symlink
+                val version = installedVersion(File(AgentSlots.slotPackageDir(ctx, pkg, AgentSlots.read(ctx, pkg)?.active ?: "a"), "package.json"))
+                val s = AgentSlots.read(ctx, pkg)
+                if (s == null) {
+                    AgentSlots.initActive(ctx, pkg, version)
+                } else {
+                    onLine("[phone-agent] $pkg 现役槽已更新到 $version")
+                }
+            }
             code == 0
         } catch (e: Exception) {
             onLine("[phone-agent] 安装异常：${e.message}")
             false
         }
-    }
-
-    private fun tgzToNodeModulesPath(tgz: String): String = when (tgz) {
-        Versions.ZCODE_TGZ -> "lib/node_modules/zcode-app-cli/package.json"
-        else -> "lib/node_modules/@deepseek-ai/dsh/package.json"
     }
 
     /** Reads the "version" field from an installed package's package.json. */

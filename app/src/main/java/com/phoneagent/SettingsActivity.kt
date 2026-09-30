@@ -112,6 +112,16 @@ class SettingsActivity : ComponentActivity() {
                 item {
                     Card {
                         Column(Modifier.padding(16.dp)) {
+                            val rollbackRows = remember(updateStatus) {
+                                listOfNotNull(
+                                    AgentSlots.read(this@SettingsActivity, AgentSlots.ZCODE)
+                                        ?.takeIf { it.standby != null && it.state == "verified" }
+                                        ?.let { "回滚 zcode 到 ${it.standbyVersion}" to "zcode-app-cli" },
+                                    AgentSlots.read(this@SettingsActivity, AgentSlots.DSH)
+                                        ?.takeIf { it.standby != null && it.state == "verified" }
+                                        ?.let { "回滚 dsh 到 ${it.standbyVersion}" to "@deepseek-ai/dsh" },
+                                )
+                            }
                             M3Text(updateStatus, color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp)
                             Spacer(Modifier.height(10.dp))
                             UpdateRow("检查更新", enabled = true) {
@@ -145,6 +155,22 @@ class SettingsActivity : ComponentActivity() {
                                     val log = StringBuilder()
                                     doUpdate("@deepseek-ai/dsh", log)
                                     ui { updateStatus = log.toString() }
+                                }
+                            }
+                            M3Text(
+                                "更新装入备用槽，下次启动切换；启动失败自动回滚。",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            rollbackRows.forEach { row ->
+                                UpdateRow(row.first, enabled = true) {
+                                    threadRun {
+                                        val log = StringBuilder()
+                                        AgentUpdate.rollback(this@SettingsActivity, row.second) { line -> log.append(line).append('
+') }
+                                        ui { updateStatus = log.toString().trim() }
+                                    }
                                 }
                             }
                         }
