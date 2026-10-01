@@ -84,13 +84,12 @@ class OpencodeWebService : Service() {
             // runtime next to the musl loader
             env["TMPDIR"] = cacheDir.absolutePath
             env["LD_LIBRARY_PATH"] = NodeRuntime.pkgDir(this).absolutePath
-            // Bun's resolver cannot read Android's DNS config; route its
-            // network through the local Node forward proxy
-            val (proxyUrl, _) = NodeRuntime.ensureDnsProxy(this)
-            env["HTTP_PROXY"] = proxyUrl
-            env["HTTPS_PROXY"] = proxyUrl
-            env["NO_PROXY"] = "127.0.0.1,localhost"
             pb.environment().putAll(env)
+            // NOTE: do NOT set HTTP_PROXY/HTTPS_PROXY here. Bun's HTTP server
+            // hangs on startup when a proxy is configured (it tries to route
+            // its own listener through the proxy). The DNS proxy is only
+            // needed inside agent sessions (run via run-opencode.sh), not for
+            // the serve process itself.
             pb.redirectErrorStream(true)
             // serve writes to the redirected file; appendLog kept for parity
             val serveLog = File(cacheDir, "opencode-serve.log")
