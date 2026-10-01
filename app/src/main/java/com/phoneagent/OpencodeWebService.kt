@@ -77,7 +77,14 @@ class OpencodeWebService : Service() {
                 "--print-logs",
             )
             appendLog("[4] spawning serve: " + args.joinToString(" "))
-            val pb = ProcessBuilder(args)
+            // ProcessBuilder.redirectOutput(File) does not reliably redirect
+            // fd 1/2 on this Android version (fd inspection showed sockets
+            // instead of the target file). Shell redirection is reliable.
+            val serveLog = File(cacheDir, "opencode-serve.log")
+            val pb = ProcessBuilder(
+                "/system/bin/sh", "-c",
+                "exec " + args.joinToString(" ") + " > " + serveLog.absolutePath + " 2>&1",
+            )
             if (workDir.isDirectory) pb.directory(workDir)
             val env = NodeRuntime.environment(this).toMutableMap()
             // Bun needs a writable temp dir (no /tmp on Android) and the GNU C++
@@ -85,21 +92,9 @@ class OpencodeWebService : Service() {
             env["TMPDIR"] = cacheDir.absolutePath
             env["LD_LIBRARY_PATH"] = NodeRuntime.pkgDir(this).absolutePath
             pb.environment().putAll(env)
-            // NOTE: do NOT set HTTP_PROXY/HTTPS_PROXY here. Bun's HTTP server
-            // hangs on startup when a proxy is configured (it tries to route
-            // its own listener through the proxy). The DNS proxy is only
-            // needed inside agent sessions (run via run-opencode.sh), not for
-            // the serve process itself.
-            pb.redirectErrorStream(true)
-            // serve writes to the redirected file; appendLog kept for parity
-            val serveLog = File(cacheDir, "opencode-serve.log")
-            pb.redirectOutput(serveLog)
             val p = pb.start()
             appendLog("[5] serve spawned")
             proc = p
-            thread(name = "opencode-log") {
-                p.inputStream.bufferedReader().forEachLine { line -> appendLog(line) }
-            }
             notify("等待 opencode 就绪…")
             val ready = awaitHttpReady(timeoutMs = 60_000)
             if (ready) {
