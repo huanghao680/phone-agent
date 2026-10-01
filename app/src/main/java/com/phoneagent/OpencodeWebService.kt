@@ -115,7 +115,7 @@ class OpencodeWebService : Service() {
                     append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
                     append(" > '").append(serveLog.absolutePath).append("' 2>&1")
                 }
-                p = ProcessBuilder("su", "-c", serveCmd).start()
+                p = ProcessBuilder("su", "-c", serveCmd).apply { redirectErrorStream(true) }.start()
                 spawnedViaRoot = true
             } else {
                 appendLog("[4] spawning serve in app domain")
@@ -133,6 +133,11 @@ class OpencodeWebService : Service() {
             }
             appendLog("[5] serve spawned")
             proc = p
+            // su client errors (denial, daemon unreachable) print to stderr —
+            // capture them, otherwise a failed root spawn is fully silent
+            thread(name = "opencode-su-log") {
+                p.inputStream.bufferedReader().forEachLine { line -> appendLog("[su] $line") }
+            }
             notify("等待 opencode 就绪…")
             val ready = awaitHttpReady(timeoutMs = 60_000)
             if (ready) {
