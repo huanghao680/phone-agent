@@ -166,7 +166,9 @@ object NodeRuntime {
             "opencode.tgz", "libstdc++.so.6", "libgcc_s.so.1",
         )) {
             try {
-                copyAssetIfChanged(ctx, "terminal-extra/$name", File(pkgDir(ctx), name))
+                // the loader and ripgrep get exec'd directly (serve / dsh shim)
+                copyAssetIfChanged(ctx, "terminal-extra/$name", File(pkgDir(ctx), name),
+                    executable = name == "ld-musl-aarch64.so.1" || name == "rg")
             } catch (_: IOException) {
                 // asset absent: picker shows the entries as unavailable
             }
@@ -216,14 +218,22 @@ object NodeRuntime {
      * different size. The full copy set is ~350 MB (agent tarballs included);
      * unconditional re-copying on every service start used to push the first
      * web UI readiness past its timeout.
+     *
+     * [executable] additionally keeps the x bit on the destination — asset
+     * copies carry no mode, and a file first written by an old version
+     * (mode 600) would otherwise stay non-executable across upgrades forever.
      */
-    private fun copyAssetIfChanged(ctx: Context, assetPath: String, out: File) {
+    private fun copyAssetIfChanged(ctx: Context, assetPath: String, out: File, executable: Boolean = false) {
         try {
             ctx.assets.open(assetPath).use { input ->
                 val expected = input.available().toLong()
-                if (out.exists() && out.length() == expected) return
+                if (out.exists() && out.length() == expected) {
+                    if (executable && !out.canExecute()) out.setExecutable(true, false)
+                    return
+                }
                 out.parentFile?.mkdirs()
                 FileOutputStream(out).use { input.copyTo(it, 1 shl 16) }
+                if (executable) out.setExecutable(true, false)
             }
         } catch (_: IOException) {
             // asset absent: caller decides whether that is fatal
