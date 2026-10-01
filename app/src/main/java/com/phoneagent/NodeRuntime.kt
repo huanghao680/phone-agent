@@ -352,6 +352,10 @@ object NodeRuntime {
             // should see the shell they actually get
             "SHELL" to "$usr/bin/bash",
             "NODE_PATH" to "$usr/lib/node_modules",
+            // Termux-built binaries (bash, mkdir, git, ...) need the runtime
+            // prefix's libs, and Bun unpacks itself into $TMPDIR — Android has no
+            // /tmp and an inherited /data/local/tmp is EACCES.
+            "TMPDIR" to ctx.cacheDir.absolutePath,
             "npm_config_registry" to Prefs.npmRegistry(ctx),
             // The Termux-built Node hardcodes /data/data/com.termux/.../openssl.cnf;
             // outside Termux that path is unreadable and TLS init fails, so point
