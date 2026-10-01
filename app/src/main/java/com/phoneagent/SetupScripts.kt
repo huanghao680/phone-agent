@@ -286,8 +286,8 @@ export PATH="${'$'}USR/bin:${'$'}PATH"
 PROXY_JS="${'$'}USR/share/phone-agent/httpproxy.cjs"
 PROXY_PORT=8118
 if [ -f "${'$'}PROXY_JS" ]; then
-  if ! "${'$'}NODE" -e "const net=require('net');const s=net.connect(${'$'}PROXY_PORT,'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1))" 2>/dev/null; then
-    setsid "${'$'}NODE" "${'$'}PROXY_JS" >/dev/null 2>&1 &
+  if ! "${'$'}USR/bin/node" -e "const net=require('net');const s=net.connect(${'$'}PROXY_PORT,'127.0.0.1',()=>process.exit(0));s.on('error',()=>process.exit(1))" 2>/dev/null; then
+    setsid "${'$'}USR/bin/node" "${'$'}PROXY_JS" >/dev/null 2>&1 &
     sleep 1
   fi
   export HTTP_PROXY="http://127.0.0.1:${'$'}PROXY_PORT"

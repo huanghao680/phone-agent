@@ -141,7 +141,7 @@ object NodeRuntime {
             // asset absent: bootstrap continues without the dsh native binding
         }
         // dsh Android patch entry point + its Node-based patcher
-        for (name in arrayOf("patch-dsh-flock.sh", "patch-dsh-android.mjs")) {
+        for (name in arrayOf("patch-dsh-flock.sh", "patch-dsh-android.mjs", "httpproxy.cjs")) {
             try {
                 val dir = File(usrDir(ctx), "share/phone-agent").apply { mkdirs() }
                 val out = File(dir, name)
@@ -163,7 +163,7 @@ object NodeRuntime {
             "codex.tgz", "claude.tgz", "ld-musl-aarch64.so.1", "versions.json", "rg",
             // opencode: Bun executable + the musl loader / C++ runtime it needs,
             // plus the DNS proxy that routes Bun's broken resolver through Node
-            "opencode.tgz", "libstdc++.so.6", "libgcc_s.so.1", "httpproxy.cjs",
+            "opencode.tgz", "libstdc++.so.6", "libgcc_s.so.1",
         )) {
             try {
                 copyAssetIfChanged(ctx, "terminal-extra/$name", File(pkgDir(ctx), name))
