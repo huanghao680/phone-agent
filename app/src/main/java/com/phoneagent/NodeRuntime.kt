@@ -130,6 +130,13 @@ object NodeRuntime {
             Versions.RUNTIME,
         ).joinToString("|")
         val keyFile = File(pkgDir(ctx), ".staged-key")
+        // repair exec bits without re-staging: old builds wrote the loader/rg
+        // mode 600 and copyAssetIfChanged used to skip the chmod on size match,
+        // so upgrades never healed it (Magisk su exec failed EACCES on it)
+        for (name in arrayOf("ld-musl-aarch64.so.1", "rg")) {
+            val f = File(pkgDir(ctx), name)
+            if (f.exists() && !f.canExecute()) f.setExecutable(true, false)
+        }
         if (keyFile.exists() && keyFile.readText().trim() == key) return
         for (name in arrayOf(Versions.ZCODE_TGZ, Versions.DSH_TGZ)) {
             copyAssetIfChanged(ctx, "packages/$name", File(pkgDir(ctx), name))
