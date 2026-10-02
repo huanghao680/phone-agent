@@ -150,8 +150,9 @@ class OpencodeWebService : Service() {
                 val args = listOf(loader, bin, "serve", "--port", "4096", "--hostname", "127.0.0.1", "--print-logs")
                 val pb = ProcessBuilder(
                     "/system/bin/sh", "-c",
-                    "echo $$ > '" + servePidFile.absolutePath + "'; exec setsid " + args.joinToString(" ") +
-                        " < /dev/null > " + serveLog.absolutePath + " 2>&1",
+                    "echo $$ > '" + servePidFile.absolutePath + "'; setsid " + args.joinToString(" ") +
+                        " < /dev/null > " + serveLog.absolutePath + " 2>&1; " +
+                        "echo $? > '" + File(cacheDir, "opencode-serve.rc").absolutePath + "'",
                 )
                 if (workDir.isDirectory) pb.directory(workDir)
                 val env = NodeRuntime.environment(this).toMutableMap()
@@ -169,7 +170,7 @@ class OpencodeWebService : Service() {
                 p.inputStream.bufferedReader().forEachLine { line -> appendLog("[su] $line") }
             }
             notify("等待 opencode 就绪…")
-            val ready = awaitHttpReady(timeoutMs = 60_000)
+            val ready = awaitHttpReady(timeoutMs = 60_000, child = p)
             if (ready) {
                 OpencodeState.serverReady = true
                 notify("opencode 运行中")
@@ -201,6 +202,11 @@ class OpencodeWebService : Service() {
         runCatching {
             val exit = runCatching { p.exitValue() }.getOrNull()
             appendLog("[diag] alive=${p.isAlive} exitValue=$exit")
+            runCatching {
+                val rcF = File(cacheDir, "opencode-serve.rc")
+                if (rcF.exists()) appendLog("[diag] shell rc=" + rcF.readText().trim())
+                else appendLog("[diag] shell rc file absent (still running?)")
+            }
             // Bun exits immediately (before any log) when serve cannot start;
             // the exit code is the only signal we get, so report it up front
             if (exit != null) {
@@ -256,11 +262,17 @@ class OpencodeWebService : Service() {
     }
 
     /** opencode serve prints logs, not a URL; probe the HTTP endpoint instead. */
-    private fun awaitHttpReady(timeoutMs: Long): Boolean {
+    private fun awaitHttpReady(timeoutMs: Long, child: Process? = null): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
         val node = NodeRuntime.nodeBin(this)
         while (System.currentTimeMillis() < deadline) {
             if (OpencodeState.lastError != null) return false
+            // the child dying means serve gave up (e.g. port already in use);
+            // no point polling the port for the rest of the timeout
+            if (child != null && !child.isAlive) {
+                appendLog("[wait] serve child exited, aborting wait")
+                return false
+            }
             try {
                 val pb = ProcessBuilder(
                     node.absolutePath,
