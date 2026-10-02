@@ -180,7 +180,7 @@ class OpencodeWebService : Service() {
                     serveLog.readText().trim().lineSequence().lastOrNull()?.take(160)
                 }.getOrNull()
                 OpencodeState.lastError = "opencode 未在 60 秒内就绪" + (tail?.let { "：$it" } ?: "，详见 cache/opencode-serve.log") +
-                    (if (!rootMode) "（已知限制：Bun 无法在应用的 SELinux 域内运行，Root 设备会自动改用 root 域启动）" else "")
+                    (if (!rootMode) "（已知限制：Android 给应用进程装的 seccomp 过滤器会拒绝 Bun 需要的系统调用，子进程直接 Bad system call(SIGSYS) 退出；Root 设备自动改用 root 域启动，非 Root 请用终端里的 opencode TUI）" else "")
                 notify(OpencodeState.lastError!!)
                 p.destroy()
             }
