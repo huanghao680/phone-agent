@@ -80,12 +80,36 @@ class OpencodeWebService : Service() {
             // fd 1/2 on this Android version (fd inspection showed sockets
             // instead of the target file). Shell redirection is reliable.
             val serveLog = File(cacheDir, "opencode-serve.log")
+            val servePidFile = File(cacheDir, "opencode-serve.pid")
             serveLog.delete()
+            servePidFile.delete()
+
+            // Debug hooks for diagnosing the app-domain Bun stall without a
+            // new APK: cache/oc-serve-env.txt (KEY=VALUE lines) overrides the
+            // spawn environment; cache/oc-force-app-domain skips the su path
+            // so the stall is reproducible on rooted devices too.
+            val forceAppDomain = File(cacheDir, "oc-force-app-domain").exists()
+            val envOverrides = mutableMapOf<String, String>()
+            runCatching {
+                val envFile = File(cacheDir, "oc-serve-env.txt")
+                if (envFile.exists()) {
+                    envFile.readLines().forEach { line ->
+                        val t = line.trim()
+                        val i = t.indexOf('=')
+                        if (t.isNotEmpty() && !t.startsWith("#") && i > 0) {
+                            envOverrides[t.substring(0, i).trim()] = t.substring(i + 1).trim()
+                        }
+                    }
+                }
+            }
+            if (envOverrides.isNotEmpty()) {
+                appendLog("[env] overrides: $envOverrides")
+            }
 
             // Bun stalls in the app's own SELinux domain; the same binary runs
             // fine as root. Probe root only when we actually need it so a
             // device without su is never prompted here.
-            val rootMode = runCatching {
+            val rootMode = !forceAppDomain && runCatching {
                 Shell.getShell()
                 RootIntegration.hasRoot()
             }.getOrDefault(false)
@@ -107,10 +131,14 @@ class OpencodeWebService : Service() {
                             append("export ").append(k).append("='").append(v).append("'; ")
                         }
                     }
+                    envOverrides.forEach { (k, v) ->
+                        append("export ").append(k).append("='").append(v).append("'; ")
+                    }
                     // Bun needs a writable temp dir (no /tmp on Android) and the
                     // GNU C++ runtime next to the musl loader
                     append("export TMPDIR='").append(cacheDir.absolutePath).append("'; ")
                     append("export LD_LIBRARY_PATH='").append(NodeRuntime.pkgDir(this@OpencodeWebService).absolutePath).append("'; ")
+                    append("echo $$ > '").append(servePidFile.absolutePath).append("'; ")
                     append("exec '").append(loader).append("' '").append(bin).append("'")
                     append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
                     append(" > '").append(serveLog.absolutePath).append("' 2>&1")
@@ -122,12 +150,14 @@ class OpencodeWebService : Service() {
                 val args = listOf(loader, bin, "serve", "--port", "4096", "--hostname", "127.0.0.1", "--print-logs")
                 val pb = ProcessBuilder(
                     "/system/bin/sh", "-c",
-                    "exec " + args.joinToString(" ") + " > " + serveLog.absolutePath + " 2>&1",
+                    "echo $$ > '" + servePidFile.absolutePath + "'; exec " + args.joinToString(" ") +
+                        " > " + serveLog.absolutePath + " 2>&1",
                 )
                 if (workDir.isDirectory) pb.directory(workDir)
                 val env = NodeRuntime.environment(this).toMutableMap()
                 env["TMPDIR"] = cacheDir.absolutePath
                 env["LD_LIBRARY_PATH"] = NodeRuntime.pkgDir(this).absolutePath
+                env.putAll(envOverrides)
                 pb.environment().putAll(env)
                 p = pb.start()
             }
@@ -144,6 +174,7 @@ class OpencodeWebService : Service() {
                 OpencodeState.serverReady = true
                 notify("opencode 运行中")
             } else {
+                dumpServeDiagnostics(p)
                 val tail = runCatching {
                     serveLog.readText().trim().lineSequence().lastOrNull()?.take(160)
                 }.getOrNull()
@@ -159,6 +190,49 @@ class OpencodeWebService : Service() {
     }
 
     private fun pkgLDLoader(ctx: Context): String = File(NodeRuntime.pkgDir(ctx), "ld-musl-aarch64.so.1").absolutePath
+
+    /**
+     * Dumps the stalled serve child's kernel-side state into opencode.log.
+     * The service is the child's direct parent (same uid), so /proc reads are
+     * permitted where an external run-as shell would be denied across SELinux
+     * domains. This is how we see which syscall Bun is stuck in.
+     */
+    private fun dumpServeDiagnostics(p: Process) {
+        runCatching {
+            appendLog("[diag] alive=${p.isAlive}")
+            val pidFile = File(cacheDir, "opencode-serve.pid")
+            if (!pidFile.exists()) return
+            val pid = pidFile.readText().trim().toIntOrNull() ?: return
+            val proc = File("/proc/$pid")
+            val status = File(proc, "status").readText()
+            appendLog("[diag] " + status.lineSequence()
+                .filter { it.startsWith("Name") || it.startsWith("State") || it.startsWith("Threads") || it.startsWith("VmRSS") || it.startsWith("VmSize") }
+                .joinToString(" | "))
+            val tasks = File(proc, "task").listFiles().orEmpty()
+            appendLog("[diag] threads=${tasks.size}")
+            tasks.take(40).forEach { t ->
+                val stat = runCatching { File(t, "stat").readText() }.getOrNull()
+                val state = stat?.substringAfterLast(')')?.trim()?.substringBefore(' ') ?: "?"
+                val wchan = runCatching { File(t, "wchan").readText().trim() }.getOrNull() ?: "?"
+                val syscall = runCatching { File(t, "syscall").readText().trim().substringBefore(' ') }.getOrNull() ?: "?"
+                appendLog("[diag]   tid=${t.name} state=$state wchan=$wchan syscall=$syscall")
+            }
+            runCatching {
+                val maps = File(proc, "maps").readLines()
+                val execSegs = maps.count { it.contains('x') }
+                val anonExec = maps.count { it.contains('x') && !it.contains('/') }
+                appendLog("[diag] maps=${maps.size} execSegs=$execSegs anonExec=$anonExec")
+            }
+            runCatching {
+                val fds = File(proc, "fd").listFiles().orEmpty()
+                appendLog("[diag] fds=${fds.size}")
+                fds.take(30).forEach { fd ->
+                    val target = runCatching { java.nio.file.Files.readSymbolicLink(fd.toPath()).toString() }.getOrDefault("?")
+                    appendLog("[diag]   fd=${fd.name} -> $target")
+                }
+            }
+        }.onFailure { appendLog("[diag] dump failed: ${it.message}") }
+    }
 
     /**
      * Kills leftover serve processes that would hold port 4096 (service
