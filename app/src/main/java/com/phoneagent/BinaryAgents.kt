@@ -122,10 +122,15 @@ object BinaryAgents {
             CLAUDE -> "$reg/@anthropic-ai%2fclaude-code-linux-arm64-musl/latest"
             else -> "$reg/opencode-linux-arm64-musl/latest"
         }
-        val conn = openProxyAware(ctx, url)
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 10_000
-        JSONObjectText(conn.inputStream.bufferedReader().use { it.readText() }, agent)
+        // AgentUpdate's Node-backed lookup handles https-over-proxy reliably;
+        // the Java path here is only a fallback when Node is missing.
+        val body = AgentUpdate.registryJsonFor(ctx, url)
+            ?: openProxyAware(ctx, url).run {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                inputStream.bufferedReader().use { it.readText() }
+            }
+        JSONObjectText(body, agent)
     } catch (_: Exception) {
         null
     }

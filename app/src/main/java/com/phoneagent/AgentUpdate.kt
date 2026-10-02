@@ -26,10 +26,9 @@ object AgentUpdate {
     private fun registry(ctx: Context): String = Prefs.npmRegistry(ctx).trimEnd('/')
 
     /**
-     * Opens a registry connection that honours the configured HTTP proxy.
+     * Opens a registry connection, honouring the configured HTTP proxy.
      * HttpURLConnection ignores the proxy Prefs on its own, so on proxy-only
-     * networks (direct egress firewalled) every registry request timed out and
-     * the update check reported "timeout" / "未知".
+     * networks every request timed out ("无法获取元数据：timeout").
      */
     private fun open(ctx: Context, url: String): HttpURLConnection {
         val proxy = Prefs.httpProxy(ctx)
@@ -44,14 +43,95 @@ object AgentUpdate {
         return URL(url).openConnection() as HttpURLConnection
     }
 
+    /**
+     * Registry JSON via the embedded Node.
+     *
+     * The Java stack still fails on https-over-CONNECT through some proxies
+     * (verified on device: HttpURLConnection timed out on 4 of 5 package URLs
+     * while Node's fetch returned all five), so this is the primary path for
+     * metadata. Node needs HTTPS_PROXY/NODE_USE_ENV_PROXY to be set, which
+     * NodeRuntime.environment() already does.
+     */
+    private fun nodeFetchJson(ctx: Context, url: String): JSONObject? {
+        val node = NodeRuntime.nodeBin(ctx)
+        if (!node.canExecute()) return null
+        val script = "fetch(process.argv[1],{signal:AbortSignal.timeout(20000)})" +
+            ".then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text()})" +
+            ".then(t=>{process.stdout.write(t);process.exit(0)})" +
+            ".catch(e=>{process.stderr.write(String(e.message));process.exit(1)})"
+        return try {
+            val pb = ProcessBuilder(node.absolutePath, "-e", script, url)
+            pb.environment().putAll(NodeRuntime.environment(ctx))
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            val out = p.inputStream.bufferedReader().readText()
+            if (p.waitFor() != 0 || out.isBlank()) null else runCatching { JSONObject(out) }.getOrNull()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Registry JSON for [url]: Node first (proxy-aware), Java as fallback. */
+    fun registryJsonFor(ctx: Context, url: String): JSONObject? =
+        nodeFetchJson(ctx, url) ?: runCatching {
+            val conn = open(ctx, url)
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.setRequestProperty("Accept", "application/json")
+            JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+        }.getOrNull()
+
+    /**
+     * Downloads [url] to [out], again Node-first: tarballs are hundreds of MB
+     * and the Java path times out through the proxy where Node's fetch works.
+     */
+    private fun download(ctx: Context, url: String, out: File, onFail: (String) -> Unit): Boolean {
+        nodeDownload(ctx, url, out)?.let { return it }
+        return try {
+            val conn = open(ctx, url)
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 120_000
+            conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it, 1 shl 16) } }
+            true
+        } catch (e: Exception) {
+            onFail(e.message ?: e.javaClass.simpleName)
+            false
+        }
+    }
+
+    /** Fetch [url] to [out] with the embedded Node. Null when Node is unusable. */
+    private fun nodeDownload(ctx: Context, url: String, out: File): Boolean? {
+        val node = NodeRuntime.nodeBin(ctx)
+        if (!node.canExecute()) return null
+        val tmp = File(out.absolutePath + ".part")
+        val script = "const{createWriteStream}=require('fs');" +
+            "fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);" +
+            "const w=createWriteStream(process.argv[2]);" +
+            "return new Promise((res,rej)=>{r.body.pipe(w);w.on('finish',res);w.on('error',rej)})})" +
+            ".then(()=>process.exit(0)).catch(e=>{process.stderr.write(String(e.message));process.exit(1)})"
+        return try {
+            val pb = ProcessBuilder(node.absolutePath, "-e", script, url, tmp.absolutePath)
+            pb.environment().putAll(NodeRuntime.environment(ctx))
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            p.inputStream.bufferedReader().readText()
+            val rc = p.waitFor()
+            if (rc == 0 && tmp.exists() && tmp.length() > 0) {
+                tmp.renameTo(out)
+                true
+            } else {
+                tmp.delete()
+                false // Node ran and failed: report it rather than retrying Java
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /** Latest version of [pkg] from the configured registry (falls back to npmjs). */
     fun latestVersion(ctx: Context, pkg: String): String? = try {
         val encoded = pkg.replace("/", "%2f")
-        val conn = open(ctx, "${registry(ctx)}/$encoded/latest")
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 10_000
-        conn.setRequestProperty("Accept", "application/json")
-        conn.inputStream.bufferedReader().use { it.readText() }.let { JSONText -> JSONObject(JSONText).getString("version") }
+        registryJsonFor(ctx, "${registry(ctx)}/$encoded/latest")?.getString("version")
     } catch (_: Exception) {
         null
     }
@@ -85,10 +165,7 @@ object AgentUpdate {
     fun fetchTarball(ctx: Context, pkg: String, version: String, onLine: (String) -> Unit): File? {
         val enc = pkg.replace("/", "%2f")
         val meta = try {
-            val conn = open(ctx, "${registry(ctx)}/$enc")
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 15_000
-            JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            registryJsonFor(ctx, "${registry(ctx)}/$enc") ?: throw Exception("registry 不可达")
         } catch (e: Exception) {
             onLine("[update] 无法获取 $pkg 元数据：${e.message}")
             return null
@@ -102,13 +179,7 @@ object AgentUpdate {
         val safe = pkg.replace("@", "").replace("/", "-")
         val out = File(NodeRuntime.pkgDir(ctx), "$safe-$version.tgz")
         onLine("[update] 下载 $pkg@$version ...")
-        try {
-            val conn = open(ctx, tarball)
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 60_000
-            conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it, 1 shl 16) } }
-        } catch (e: Exception) {
-            onLine("[update] 下载失败：${e.message}")
+        if (!download(ctx, tarball, out) { onLine("[update] 下载失败：$it") }) {
             out.delete()
             return null
         }
@@ -220,16 +291,8 @@ object AgentUpdate {
         }
         val out = File(NodeRuntime.pkgDir(ctx), "$agent.tgz")
         onLine("[update] 下载 $agent@$version ...")
-        try {
-            val conn = open(ctx, tarball)
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 120_000
-            conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it, 1 shl 16) } }
-            onLine("[update] 下载完成：${"%.1f".format(out.length() / 1048576.0)}MB")
-        } catch (e: Exception) {
-            onLine("[update] 下载失败：${e.message}")
-            return false
-        }
+        if (!download(ctx, tarball, out) { onLine("[update] 下载失败：$it") }) return false
+        onLine("[update] 下载完成：${"%.1f".format(out.length() / 1048576.0)}MB")
         File(NodeRuntime.pkgDir(ctx), ".$agent-version").delete()
         val ok = BinaryAgents.ensure(ctx, agent, onLine)
         if (ok) {
