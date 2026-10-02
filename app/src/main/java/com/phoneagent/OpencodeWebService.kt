@@ -199,7 +199,16 @@ class OpencodeWebService : Service() {
      */
     private fun dumpServeDiagnostics(p: Process) {
         runCatching {
-            appendLog("[diag] alive=${p.isAlive}")
+            val exit = runCatching { p.exitValue() }.getOrNull()
+            appendLog("[diag] alive=${p.isAlive} exitValue=$exit")
+            // Bun exits immediately (before any log) when serve cannot start;
+            // the exit code is the only signal we get, so report it up front
+            if (exit != null) {
+                appendLog("[diag] serve exited with code $exit")
+                val logBytes = File(cacheDir, "opencode-serve.log").length()
+                appendLog("[diag] serve log bytes=$logBytes")
+                return
+            }
             val pidFile = File(cacheDir, "opencode-serve.pid")
             if (!pidFile.exists()) return
             val pid = pidFile.readText().trim().toIntOrNull() ?: return
