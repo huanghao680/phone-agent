@@ -114,18 +114,38 @@ object BinaryAgents {
     fun latestVersion(ctx: Context, agent: String): String? = try {
         // codex's platform binaries are aliased versions of the main package
         // (e.g. @openai/codex@0.157.1-linux-arm64), so the main package's
-        // version determines the family; claude publishes a separate musl pkg
+        // latest tag determines the family; claude/opencode publish a separate
+        // platform package whose own latest tag is authoritative.
+        val reg = Prefs.npmRegistry(ctx).trimEnd('/')
         val url = when (agent) {
-            CODEX -> "${Prefs.npmRegistry(ctx).trimEnd('/')}/@openai%2fcodex/${Versions.CODEX_VERSION}"
-            CLAUDE -> "${Prefs.npmRegistry(ctx).trimEnd('/')}/@anthropic-ai%2fclaude-code-linux-arm64-musl/${Versions.CLAUDE_VERSION}"
-            else -> "${Prefs.npmRegistry(ctx).trimEnd('/')}/opencode-linux-arm64-musl/${Versions.OPENCODE_VERSION}"
+            CODEX -> "$reg/@openai%2fcodex/latest"
+            CLAUDE -> "$reg/@anthropic-ai%2fclaude-code-linux-arm64-musl/latest"
+            else -> "$reg/opencode-linux-arm64-musl/latest"
         }
-        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        val conn = openProxyAware(ctx, url)
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         JSONObjectText(conn.inputStream.bufferedReader().use { it.readText() }, agent)
     } catch (_: Exception) {
         null
+    }
+
+    /**
+     * Registry connection that honours the configured HTTP proxy; without it
+     * these requests time out on proxy-only networks (HttpURLConnection does
+     * not read the proxy Prefs by itself).
+     */
+    private fun openProxyAware(ctx: Context, url: String): java.net.HttpURLConnection {
+        val proxy = Prefs.httpProxy(ctx)
+        if (proxy.isNotEmpty()) {
+            runCatching {
+                val host = proxy.substringAfter("://").substringBefore(':')
+                val port = proxy.substringAfterLast(':').trimEnd('/').toIntOrNull() ?: 80
+                val p = java.net.Proxy(java.net.Proxy.Type.HTTP, java.net.InetSocketAddress(host, port))
+                java.net.URL(url).openConnection(p) as java.net.HttpURLConnection
+            }.onSuccess { return it }
+        }
+        return java.net.URL(url).openConnection() as java.net.HttpURLConnection
     }
 
     private fun JSONObjectText(body: String, agent: String): String? = try {

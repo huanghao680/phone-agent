@@ -25,11 +25,29 @@ object AgentUpdate {
 
     private fun registry(ctx: Context): String = Prefs.npmRegistry(ctx).trimEnd('/')
 
+    /**
+     * Opens a registry connection that honours the configured HTTP proxy.
+     * HttpURLConnection ignores the proxy Prefs on its own, so on proxy-only
+     * networks (direct egress firewalled) every registry request timed out and
+     * the update check reported "timeout" / "未知".
+     */
+    private fun open(ctx: Context, url: String): HttpURLConnection {
+        val proxy = Prefs.httpProxy(ctx)
+        if (proxy.isNotEmpty()) {
+            runCatching {
+                val host = proxy.substringAfter("://").substringBefore(':')
+                val port = proxy.substringAfterLast(':').trimEnd('/').toIntOrNull() ?: 80
+                val p = java.net.Proxy(java.net.Proxy.Type.HTTP, java.net.InetSocketAddress(host, port))
+                URL(url).openConnection(p) as HttpURLConnection
+            }.onSuccess { return it }
+        }
+        return URL(url).openConnection() as HttpURLConnection
+    }
+
     /** Latest version of [pkg] from the configured registry (falls back to npmjs). */
     fun latestVersion(ctx: Context, pkg: String): String? = try {
         val encoded = pkg.replace("/", "%2f")
-        val url = URL("${registry(ctx)}/$encoded/latest")
-        val conn = url.openConnection() as HttpURLConnection
+        val conn = open(ctx, "${registry(ctx)}/$encoded/latest")
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         conn.setRequestProperty("Accept", "application/json")
@@ -67,7 +85,7 @@ object AgentUpdate {
     fun fetchTarball(ctx: Context, pkg: String, version: String, onLine: (String) -> Unit): File? {
         val enc = pkg.replace("/", "%2f")
         val meta = try {
-            val conn = URL("${registry(ctx)}/$enc").openConnection() as HttpURLConnection
+            val conn = open(ctx, "${registry(ctx)}/$enc")
             conn.connectTimeout = 15_000
             conn.readTimeout = 15_000
             JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
@@ -85,7 +103,7 @@ object AgentUpdate {
         val out = File(NodeRuntime.pkgDir(ctx), "$safe-$version.tgz")
         onLine("[update] 下载 $pkg@$version ...")
         try {
-            val conn = URL(tarball).openConnection() as HttpURLConnection
+            val conn = open(ctx, tarball)
             conn.connectTimeout = 15_000
             conn.readTimeout = 60_000
             conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it, 1 shl 16) } }
@@ -203,7 +221,7 @@ object AgentUpdate {
         val out = File(NodeRuntime.pkgDir(ctx), "$agent.tgz")
         onLine("[update] 下载 $agent@$version ...")
         try {
-            val conn = URL(tarball).openConnection() as HttpURLConnection
+            val conn = open(ctx, tarball)
             conn.connectTimeout = 15_000
             conn.readTimeout = 120_000
             conn.inputStream.use { input -> out.outputStream().use { input.copyTo(it, 1 shl 16) } }
