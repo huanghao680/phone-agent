@@ -150,8 +150,8 @@ class OpencodeWebService : Service() {
                 val args = listOf(loader, bin, "serve", "--port", "4096", "--hostname", "127.0.0.1", "--print-logs")
                 val pb = ProcessBuilder(
                     "/system/bin/sh", "-c",
-                    "echo $$ > '" + servePidFile.absolutePath + "'; exec " + args.joinToString(" ") +
-                        " > " + serveLog.absolutePath + " 2>&1",
+                    "echo $$ > '" + servePidFile.absolutePath + "'; exec setsid " + args.joinToString(" ") +
+                        " < /dev/null > " + serveLog.absolutePath + " 2>&1",
                 )
                 if (workDir.isDirectory) pb.directory(workDir)
                 val env = NodeRuntime.environment(this).toMutableMap()
