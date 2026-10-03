@@ -124,7 +124,7 @@ object BinaryAgents {
         }
         // AgentUpdate's Node-backed lookup handles https-over-proxy reliably;
         // the Java path here is only a fallback when Node is missing.
-        val body = AgentUpdate.registryJsonFor(ctx, url)
+        val body: String = AgentUpdate.registryJsonFor(ctx, url)?.toString()
             ?: openProxyAware(ctx, url).run {
                 connectTimeout = 10_000
                 readTimeout = 10_000
