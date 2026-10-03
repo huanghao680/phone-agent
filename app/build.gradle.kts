@@ -15,8 +15,8 @@ android {
         // storage when targetSdk >= 29 (W^X), and the embedded Node runtime must be
         // executable from filesDir. Same tradeoff Termux makes. Not distributed via Play.
         targetSdk = 28
-        versionCode = 74
-        versionName = "0.7.57"
+        versionCode = 75
+        versionName = "0.7.58"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -74,6 +74,10 @@ dependencies {
     // dsh session logs are multi-frame zstd JSONL; the aar carries the arm64 native
     implementation("com.github.luben:zstd-jni:1.5.7-3@aar")
     implementation("com.github.topjohnwu.libsu:core:5.2.2")
+    // Shizuku: adb-level (shell uid) APIs without root — backs the opencode
+    // webui spawn and phantom-process fix on non-rooted devices
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.09.03")

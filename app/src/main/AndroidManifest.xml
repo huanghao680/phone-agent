@@ -142,5 +142,16 @@
             android:name=".OpencodeWebService"
             android:exported="false" />
 
+        <!-- Shizuku: receives the Shizuku server binder so this app can use
+             shell-uid APIs (opencode webui spawn, phantom-process fix) on
+             devices without root -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
 </application>
 </manifest>

@@ -30,6 +30,7 @@ class OpencodeWebService : Service() {
 
     private var proc: Process? = null
     private var spawnedViaRoot = false
+    private var spawnedViaShizuku = false
 
     override fun onCreate() {
         super.onCreate()
@@ -106,13 +107,15 @@ class OpencodeWebService : Service() {
                 appendLog("[env] overrides: $envOverrides")
             }
 
-            // Bun stalls in the app's own SELinux domain; the same binary runs
-            // fine as root. Probe root only when we actually need it so a
-            // device without su is never prompted here.
+            // Bun dies instantly (SIGSYS, seccomp) when the app spawns it, but
+            // runs fine from root and from run-as (adbd/adb-spawned processes
+            // skip zygote's seccomp filter). Probe root only when we need it so
+            // a device without su is never prompted here.
             val rootMode = !forceAppDomain && runCatching {
                 Shell.getShell()
                 RootIntegration.hasRoot()
             }.getOrDefault(false)
+            val shizukuMode = !rootMode && ShizukuHelper.granted()
 
             val p: Process
             if (rootMode) {
@@ -145,6 +148,33 @@ class OpencodeWebService : Service() {
                 }
                 p = ProcessBuilder("su", "-c", serveCmd).apply { redirectErrorStream(true) }.start()
                 spawnedViaRoot = true
+            } else if (shizukuMode) {
+                appendLog("[4] spawning serve via Shizuku (shell uid + run-as)")
+                killStaleServeViaRunAs()
+                // Same inline-export command as the su path; run-as re-enters
+                // the app's private data (requires a debuggable build). The
+                // serve process ends up app-uid/shell-domain: no seccomp kill,
+                // and the app can still signal it directly (same uid).
+                val serveCmd = buildString {
+                    if (workDir.isDirectory) append("cd '").append(workDir.absolutePath).append("' 2>/dev/null; ")
+                    NodeRuntime.environment(this@OpencodeWebService).forEach { (k, v) ->
+                        if (k.endsWith("_PROXY")) return@forEach
+                        if (v.none { it == ' ' || it == '\'' || it == ';' || it == '$' }) {
+                            append("export ").append(k).append("='").append(v).append("'; ")
+                        }
+                    }
+                    envOverrides.forEach { (k, v) ->
+                        append("export ").append(k).append("='").append(v).append("'; ")
+                    }
+                    append("export TMPDIR='").append(cacheDir.absolutePath).append("'; ")
+                    append("export LD_LIBRARY_PATH='").append(NodeRuntime.pkgDir(this@OpencodeWebService).absolutePath).append("'; ")
+                    append("echo $$ > '").append(servePidFile.absolutePath).append("'; ")
+                    append("exec '").append(loader).append("' '").append(bin).append("'")
+                    append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
+                    append(" > '").append(serveLog.absolutePath).append("' 2>&1")
+                }
+                p = ShizukuHelper.sh("run-as " + packageName + " sh -c '" + serveCmd + "'")
+                spawnedViaShizuku = true
             } else {
                 appendLog("[4] spawning serve in app domain")
                 val args = listOf(loader, bin, "serve", "--port", "4096", "--hostname", "127.0.0.1", "--print-logs")
@@ -261,6 +291,17 @@ class OpencodeWebService : Service() {
         }
     }
 
+    /**
+     * Same scan without root, for the Shizuku spawn path: the scan runs
+     * through Shizuku's shell (shell uid can read any /proc cmdline and kill
+     * app processes, like adb shell can).
+     */
+    private fun killStaleServeViaRunAs() {
+        runCatching {
+            ShizukuHelper.sh(STALE_SERVE_KILL).waitFor()
+        }
+    }
+
     /** opencode serve prints logs, not a URL; probe the HTTP endpoint instead. */
     private fun awaitHttpReady(timeoutMs: Long, child: Process? = null): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -301,6 +342,10 @@ class OpencodeWebService : Service() {
             // su's client process dying does not necessarily kill the daemon's
             // child; terminate the serve process itself while we still can
             killStaleServe()
+        } else if (spawnedViaShizuku) {
+            // same idea: Shizuku's wrapper is shell-uid, its child ours —
+            // sweep by argv in case the wrapper death orphaned it
+            killStaleServeViaRunAs()
         }
         proc?.destroy()
         proc = null

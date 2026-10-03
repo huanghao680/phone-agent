@@ -218,6 +218,51 @@ class SettingsActivity : ComponentActivity() {
                     }
                 }
 
+                item { GroupTitle("Shizuku（非 root 的 adb 权限）") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            var shizukuState by remember {
+                                mutableStateOf(if (ShizukuHelper.granted()) "已授权"
+                                    else if (ShizukuHelper.available()) "已运行，未授权"
+                                    else "未运行（安装 Shizuku 后启动一次）")
+                            }
+                            var shizukuLog by remember { mutableStateOf("") }
+                            M3Text(
+                                "opencode webui 在非 root 设备上通过 Shizuku（adb 权限）启动：" +
+                                    "安装 Shizuku 应用 → 开启一次（无线调试或 adb）→ 点下方请求授权。" +
+                                    "设备重启后需要重新启动 Shizuku。",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            M3Text("状态：$shizukuState", color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp)
+                            Spacer(Modifier.height(8.dp))
+                            UpdateRow("请求 Shizuku 权限", enabled = ShizukuHelper.available()) {
+                                ShizukuHelper.request(this@SettingsActivity)
+                                threadRun {
+                                    Thread.sleep(2500)
+                                    ui {
+                                        shizukuState = if (ShizukuHelper.granted()) "已授权"
+                                        else if (ShizukuHelper.available()) "已运行，未授权"
+                                        else "未运行"
+                                    }
+                                }
+                            }
+                            UpdateRow("修复幻象进程限制（Shizuku）", enabled = ShizukuHelper.granted()) {
+                                threadRun {
+                                    val lines = ShizukuHelper.fixPhantomProcesses()
+                                    ui { shizukuLog = lines.joinToString("\n") }
+                                }
+                            }
+                            if (shizukuLog.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                M3Text(shizukuLog, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
                 item { GroupTitle("root 深度集成（可选）") }
                 item {
                     Card {
