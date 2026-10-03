@@ -5,9 +5,6 @@ import android.os.ParcelFileDescriptor
 import moe.shizuku.server.IShizukuService
 import rikka.shizuku.Shizuku
 import rikka.shizuku.ShizukuBinderWrapper
-import java.io.FileDescriptor
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -54,7 +51,7 @@ object ShizukuHelper {
     /** Runs [cmd] via the Shizuku server (shell uid). [dir] may be null. */
     fun newProcess(cmd: List<String>, dir: String?): Process {
         val svc = IShizukuService.Stub.asInterface(
-            ShizukuBinderWrapper(Shizuku.getBinder()),
+            ShizukuBinderWrapper(Shizuku.getBinder()!!),
         )
         return RemoteProcessAdapter(svc.newProcess(cmd.toTypedArray(), null, dir))
     }
@@ -96,13 +93,13 @@ private class RemoteProcessAdapter(private val remote: moe.shizuku.server.IRemot
     @Volatile private var code: Int? = null
 
     override fun getOutputStream(): OutputStream =
-        FileOutputStream(ParcelFileDescriptor.AutoCloseOutputStream(remote.outputStream))
+        ParcelFileDescriptor.AutoCloseOutputStream(remote.outputStream)
 
     override fun getInputStream(): InputStream =
-        FileInputStream(ParcelFileDescriptor.AutoCloseInputStream(remote.inputStream))
+        ParcelFileDescriptor.AutoCloseInputStream(remote.inputStream)
 
     override fun getErrorStream(): InputStream =
-        FileInputStream(ParcelFileDescriptor.AutoCloseInputStream(remote.errorStream))
+        ParcelFileDescriptor.AutoCloseInputStream(remote.errorStream)
 
     override fun waitFor(): Int {
         if (code == null) {
