@@ -1,7 +1,15 @@
 package com.phoneagent
 
 import android.app.Activity
+import android.os.ParcelFileDescriptor
+import moe.shizuku.server.IShizukuService
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuBinderWrapper
+import java.io.FileDescriptor
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 
 /**
  * Thin wrapper over the Shizuku client API.
@@ -13,6 +21,10 @@ import rikka.shizuku.Shizuku
  * installs for app processes, which is what kills Bun (opencode) when the
  * app spawns it directly. Wrapping with `run-as com.phoneagent` re-enters
  * the app's private data (debug builds only — run-as needs a debuggable app).
+ *
+ * Shizuku.newProcess is private in API 13, so we talk to IShizukuService
+ * through a ShizukuBinderWrapper and adapt the returned IRemoteProcess to
+ * java.lang.Process ourselves.
  */
 object ShizukuHelper {
 
@@ -40,8 +52,12 @@ object ShizukuHelper {
     }
 
     /** Runs [cmd] via the Shizuku server (shell uid). [dir] may be null. */
-    fun newProcess(cmd: List<String>, dir: String?): Process =
-        Shizuku.newProcess(cmd.toTypedArray(), null, dir)
+    fun newProcess(cmd: List<String>, dir: String?): Process {
+        val svc = IShizukuService.Stub.asInterface(
+            ShizukuBinderWrapper(Shizuku.getBinder()),
+        )
+        return RemoteProcessAdapter(svc.newProcess(cmd.toTypedArray(), null, dir))
+    }
 
     /** Convenience: `sh -c [command]` in the shell context. */
     fun sh(command: String, dir: String? = null): Process =
@@ -70,5 +86,53 @@ object ShizukuHelper {
         }
         out += "完成（Shizuku）。该设置在系统 OTA / 重启后可能需要重新执行。"
         return out
+    }
+}
+
+/** Adapts Shizuku's IRemoteProcess binder interface to java.lang.Process. */
+private class RemoteProcessAdapter(private val remote: moe.shizuku.server.IRemoteProcess) : Process() {
+
+    private val exited = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var code: Int? = null
+
+    override fun getOutputStream(): OutputStream =
+        FileOutputStream(ParcelFileDescriptor.AutoCloseOutputStream(remote.outputStream))
+
+    override fun getInputStream(): InputStream =
+        FileInputStream(ParcelFileDescriptor.AutoCloseInputStream(remote.inputStream))
+
+    override fun getErrorStream(): InputStream =
+        FileInputStream(ParcelFileDescriptor.AutoCloseInputStream(remote.errorStream))
+
+    override fun waitFor(): Int {
+        if (code == null) {
+            code = try {
+                remote.waitFor()
+            } catch (e: InterruptedException) {
+                throw e
+            } catch (e: Exception) {
+                throw RuntimeException("shizuku waitFor failed: ${e.message}", e)
+            }
+            exited.set(true)
+        }
+        return code!!
+    }
+
+    override fun exitValue(): Int {
+        if (code != null) return code!!
+        try {
+            code = remote.exitValue()
+            exited.set(true)
+            return code!!
+        } catch (_: Throwable) {
+            throw IllegalThreadStateException("process has not exited")
+        }
+    }
+
+    override fun destroy() {
+        try {
+            remote.destroy()
+        } catch (_: Throwable) {
+        }
     }
 }
