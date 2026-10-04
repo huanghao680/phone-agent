@@ -61,6 +61,66 @@ object ShizukuHelper {
         newProcess(listOf("sh", "-c", command), dir)
 
     /**
+     * Ports in LISTEN state, read from /proc/net/tcp. This is the shell's
+     * view: Android 11+ hides /proc/net from app processes, so the app cannot
+     * see its own listeners otherwise (it can only blind-probe them).
+     */
+    fun listeningPorts(): List<Int> {
+        if (!granted()) return emptyList()
+        return try {
+            val p = sh("cat /proc/net/tcp /proc/net/tcp6 2>/dev/null")
+            val text = p.inputStream.bufferedReader().use { it.readText() }
+            p.waitFor()
+            text.lineSequence().drop(1)
+                .map { it.trim().split(Regex("\s+")) }
+                // state 0A = TCP_LISTEN; local_address is HOST:PORT in hex
+                .filter { it.size > 3 && it[3] == "0A" }
+                .mapNotNull { it[1].substringAfter(':').toIntOrNull(16) }
+                .distinct()
+                .sorted()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Human-readable listening-port table, one line per port. */
+    fun portReport(): String {
+        val ports = listeningPorts()
+        if (ports.isEmpty()) return "未读取到监听端口（Shizuku 未授权或 /proc/net 不可读）"
+        return ports.joinToString("  ") { "$it${PORT_HINTS[it]?.let { h -> " [$h]" } ?: ""}" }
+    }
+
+    /**
+     * Grants "all files access" (MANAGE_EXTERNAL_STORAGE) through Shizuku.
+     * Normally the user has to dig into a special settings page for this; the
+     * shell uid holds the appops permission itself, so one command does it.
+     */
+    fun grantAllFilesAccess(): List<String> {
+        if (!granted()) return listOf("Shizuku 未授权或未运行")
+        val out = mutableListOf<String>()
+        val before = appOpsLine()
+        val p = sh("appops set --uid $APP_UID MANAGE_EXTERNAL_STORAGE allow 2>&1")
+        val text = p.inputStream.bufferedReader().use { it.readText() }
+        val rc = p.waitFor()
+        val after = appOpsLine()
+        out += if (rc == 0) "[ok] appops set --uid $APP_UID MANAGE_EXTERNAL_STORAGE allow"
+        else "[fail] ($rc) $text"
+        out += "授权前: $before"
+        out += "授权后: $after"
+        return out
+    }
+
+    /** Reads the current MANAGE_EXTERNAL_STORAGE appop state for our uid. */
+    private fun appOpsLine(): String = try {
+        val p = sh("appops get --uid $APP_UID MANAGE_EXTERNAL_STORAGE 2>&1")
+        val t = p.inputStream.bufferedReader().use { it.readText() }
+        p.waitFor()
+        t.trim().lineSequence().lastOrNull()?.trim().orEmpty().ifEmpty { "(none)" }
+    } catch (e: Exception) {
+        "(appops 不可用: ${e.message})"
+    }
+
+    /**
      * Fixes the phantom-process limit through Shizuku (shell has
      * WRITE_SECURE_SETTINGS, root not needed). Returns human-readable lines.
      */
@@ -84,6 +144,17 @@ object ShizukuHelper {
         out += "完成（Shizuku）。该设置在系统 OTA / 重启后可能需要重新执行。"
         return out
     }
+
+    /** Our own uid, as appops expects it. Resolved lazily from the process. */
+    private val APP_UID: Int get() = android.os.Process.myUid()
+
+    /** Ports this app uses, so the report is readable rather than raw. */
+    private val PORT_HINTS: Map<Int, String> = mapOf(
+        3030 to "zcode web",
+        3080 to "dsh web",
+        4096 to "opencode webui",
+        8118 to "DNS proxy",
+    )
 }
 
 /** Adapts Shizuku's IRemoteProcess binder interface to java.lang.Process. */
