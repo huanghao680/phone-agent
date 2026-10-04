@@ -151,14 +151,21 @@ class OpencodeWebService : Service() {
             } else if (shizukuMode) {
                 appendLog("[4] spawning serve via Shizuku (shell uid + run-as)")
                 killStaleServeViaRunAs()
-                // Same inline-export command as the su path; run-as re-enters
-                // the app's private data (requires a debuggable build). The
-                // serve process ends up app-uid/shell-domain: no seccomp kill,
-                // and the app can still signal it directly (same uid).
+                // Same inline-export command as the su path, but everything the
+                // serve process must WRITE lives under /data/local/tmp: run-as
+                // only changes the uid, the SELinux domain stays shell, and the
+                // shell domain may read but not write app data. The existing
+                // config is copied over so the webui keeps the user's settings.
+                val ocHome = "/data/local/tmp/oc-home"
+                val ocTmp = "/data/local/tmp/oc-tmp"
+                val ocLog = "$ocTmp/serve.log"
                 val serveCmd = buildString {
+                    append("mkdir -p '").append(ocHome).append("' '").append(ocTmp).append("'; ")
+                    append("cp -r '").append(NodeRuntime.homeDir(this@OpencodeWebService).absolutePath)
+                        .append("/.config' '").append(ocHome).append("/' 2>/dev/null; ")
                     if (workDir.isDirectory) append("cd '").append(workDir.absolutePath).append("' 2>/dev/null; ")
                     NodeRuntime.environment(this@OpencodeWebService).forEach { (k, v) ->
-                        if (k.endsWith("_PROXY")) return@forEach
+                        if (k.endsWith("_PROXY") || k == "HOME" || k == "TMPDIR" || k == "LD_LIBRARY_PATH") return@forEach
                         if (v.none { it == ' ' || it == '\'' || it == ';' || it == '$' }) {
                             append("export ").append(k).append("='").append(v).append("'; ")
                         }
@@ -166,12 +173,13 @@ class OpencodeWebService : Service() {
                     envOverrides.forEach { (k, v) ->
                         append("export ").append(k).append("='").append(v).append("'; ")
                     }
-                    append("export TMPDIR='").append(cacheDir.absolutePath).append("'; ")
+                    append("export HOME='").append(ocHome).append("'; ")
+                    append("export TMPDIR='").append(ocTmp).append("'; ")
                     append("export LD_LIBRARY_PATH='").append(NodeRuntime.pkgDir(this@OpencodeWebService).absolutePath).append("'; ")
-                    append("echo $$ > '").append(servePidFile.absolutePath).append("'; ")
+                    append("echo $$ > '").append(ocTmp).append("/serve.pid'; ")
                     append("exec '").append(loader).append("' '").append(bin).append("'")
                     append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
-                    append(" > '").append(serveLog.absolutePath).append("' 2>&1")
+                    append(" > '").append(ocLog).append("' 2>&1")
                 }
                 p = ShizukuHelper.sh("run-as " + packageName + " sh -c '" + serveCmd + "'")
                 spawnedViaShizuku = true
