@@ -132,7 +132,7 @@ object Bootstrap {
                 val s = AgentSlots.read(ctx, pkg)
                 if (s == null) {
                     AgentSlots.initActive(ctx, pkg, version)
-                } else {
+                } else if (version != null) {
                     AgentSlots.setActiveVersion(ctx, pkg, version)
                     onLine("[phone-agent] $pkg 现役槽已更新到 $version")
                 }
