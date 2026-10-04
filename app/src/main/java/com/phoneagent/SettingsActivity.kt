@@ -58,6 +58,7 @@ class SettingsActivity : ComponentActivity() {
             mutableStateOf(Workspace.workspacePath(this) ?: "未选择（默认使用 APP 私有目录）")
         }
         var updateStatus by remember { mutableStateOf("点击检查后显示版本对比") }
+        var updateInfos by remember { mutableStateOf<List<AgentUpdate.Info>?>(null) }
         var rootEnabled by remember { mutableStateOf(false) }
         var rootLog by remember { mutableStateOf("") }
 
@@ -129,6 +130,7 @@ class SettingsActivity : ComponentActivity() {
                                 threadRun {
                                     val result = try { AgentUpdate.status(this@SettingsActivity) } catch (e: Exception) { emptyList() }
                                     ui {
+                                        updateInfos = result
                                         updateStatus = if (result.isEmpty()) "检查失败：registry 不可达"
                                         else result.joinToString("\n") { i ->
                                             when {
@@ -141,7 +143,7 @@ class SettingsActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            UpdateRow("更新 zcode", enabled = AgentUpdate.status(this@SettingsActivity).firstOrNull()?.updateAvailable == true) {
+                            UpdateRow("更新 zcode", enabled = updateInfos?.firstOrNull()?.updateAvailable == true) {
                                 updateStatus = "更新 zcode 中…"
                                 threadRun {
                                     val log = StringBuilder()
@@ -149,7 +151,7 @@ class SettingsActivity : ComponentActivity() {
                                     ui { updateStatus = log.toString() }
                                 }
                             }
-                            UpdateRow("更新 dsh", enabled = AgentUpdate.status(this@SettingsActivity).lastOrNull()?.updateAvailable == true) {
+                            UpdateRow("更新 dsh", enabled = updateInfos?.lastOrNull()?.updateAvailable == true) {
                                 updateStatus = "更新 dsh 中…"
                                 threadRun {
                                     val log = StringBuilder()
