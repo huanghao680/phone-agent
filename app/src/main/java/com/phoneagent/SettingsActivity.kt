@@ -269,6 +269,18 @@ class SettingsActivity : ComponentActivity() {
                                     ui { shizukuLog = lines }
                                 }
                             }
+                            UpdateRow("加入电池优化白名单（Shizuku）", enabled = ShizukuHelper.granted()) {
+                                threadRun {
+                                    val lines = ShizukuHelper.whitelistFromBatteryOptimization()
+                                    ui { shizukuLog = lines.joinToString("\n") }
+                                }
+                            }
+                            UpdateRow("授予通知权限（Shizuku）", enabled = ShizukuHelper.granted()) {
+                                threadRun {
+                                    val lines = ShizukuHelper.grantNotifications()
+                                    ui { shizukuLog = lines.joinToString("\n") }
+                                }
+                            }
                             if (shizukuLog.isNotEmpty()) {
                                 Spacer(Modifier.height(8.dp))
                                 M3Text(shizukuLog, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)

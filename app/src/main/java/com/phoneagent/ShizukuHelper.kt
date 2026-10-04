@@ -110,6 +110,38 @@ object ShizukuHelper {
         return out
     }
 
+    /**
+     * Adds this app to the device-idle (Doze) whitelist. Without it the
+     * system throttles our foreground services and the agent sessions they
+     * host get killed in the background; shell can whitelist, an app cannot.
+     */
+    fun whitelistFromBatteryOptimization(): List<String> {
+        if (!granted()) return listOf("Shizuku 未授权或未运行")
+        val out = mutableListOf<String>()
+        val p = sh("dumpsys deviceidle whitelist +$PKG 2>&1")
+        val text = p.inputStream.bufferedReader().use { it.readText() }
+        val rc = p.waitFor()
+        out += if (rc == 0) "[ok] 已加入电池优化白名单" else "[fail] ($rc) $text"
+        val check = sh("dumpsys deviceidle whitelist 2>/dev/null | grep -i $PKG")
+        val present = check.inputStream.bufferedReader().use { it.readText() }
+        check.waitFor()
+        out += "白名单状态: " + (present.trim().ifEmpty { "（未生效）" })
+        return out
+    }
+
+    /**
+     * Grants POST_NOTIFICATIONS. Our services report through ongoing
+     * notifications, so losing this (denied at install on Android 13+)
+     * hides failures like a stalled webui from the user entirely.
+     */
+    fun grantNotifications(): List<String> {
+        if (!granted()) return listOf("Shizuku 未授权或未运行")
+        val p = sh("pm grant $PKG android.permission.POST_NOTIFICATIONS 2>&1")
+        val text = p.inputStream.bufferedReader().use { it.readText() }
+        val rc = p.waitFor()
+        return listOf(if (rc == 0 || text.isBlank()) "[ok] 已授予通知权限" else "[fail] ($rc) $text")
+    }
+
     /** Reads the current MANAGE_EXTERNAL_STORAGE appop state for our uid. */
     private fun appOpsLine(): String = try {
         val p = sh("appops get --uid $APP_UID MANAGE_EXTERNAL_STORAGE 2>&1")
@@ -147,6 +179,7 @@ object ShizukuHelper {
 
     /** Our own uid, as appops expects it. Resolved lazily from the process. */
     private val APP_UID: Int get() = android.os.Process.myUid()
+    private const val PKG = "com.phoneagent"
 
     /** Ports this app uses, so the report is readable rather than raw. */
     private val PORT_HINTS: Map<Int, String> = mapOf(
