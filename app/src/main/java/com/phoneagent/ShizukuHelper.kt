@@ -66,20 +66,20 @@ object ShizukuHelper {
      * see its own listeners otherwise (it can only blind-probe them).
      */
     fun listeningPorts(): List<Int> {
-        if (!granted()) return emptyList()
+        if (!granted()) return listOf<Int>()
         return try {
             val p = sh("cat /proc/net/tcp /proc/net/tcp6 2>/dev/null")
             val text = p.inputStream.bufferedReader().use { it.readText() }
             p.waitFor()
             text.lineSequence().drop(1)
-                .map { it.trim().split(Regex("\s+")) }
+                .map { it.trim().split(WHITESPACE) }
                 // state 0A = TCP_LISTEN; local_address is HOST:PORT in hex
                 .filter { it.size > 3 && it[3] == "0A" }
                 .mapNotNull { it[1].substringAfter(':').toIntOrNull(16) }
                 .distinct()
                 .sorted()
         } catch (_: Exception) {
-            emptyList()
+            listOf<Int>()
         }
     }
 
@@ -179,6 +179,9 @@ object ShizukuHelper {
 
     /** Our own uid, as appops expects it. Resolved lazily from the process. */
     private val APP_UID: Int get() = android.os.Process.myUid()
+
+    private val WHITESPACE = Regex("[ \t]+")
+
     private const val PKG = "com.phoneagent"
 
     /** Ports this app uses, so the report is readable rather than raw. */
