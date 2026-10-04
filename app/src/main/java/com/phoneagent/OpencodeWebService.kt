@@ -118,68 +118,60 @@ class OpencodeWebService : Service() {
             val shizukuMode = !rootMode && ShizukuHelper.granted()
 
             val p: Process
+            // Shared serve command: env inline as exports (su sanitizes the
+            // caller's env), pid file for cleanup, shell redirection for
+            // output. Serve argv ("opencode serve --port 4096") doubles as the
+            // stale-process pattern.
+            val serveCmd = buildString {
+                if (workDir.isDirectory) append("cd '").append(workDir.absolutePath).append("' 2>/dev/null; ")
+                NodeRuntime.environment(this@OpencodeWebService).forEach { (k, v) ->
+                    // serve needs no proxy: Bun's HTTP server stalls when one
+                    // is configured (it routes its own listener through it)
+                    if (k.endsWith("_PROXY")) return@forEach
+                    if (v.none { it == ' ' || it == '\'' || it == ';' || it == '$' }) {
+                        append("export ").append(k).append("='").append(v).append("'; ")
+                    }
+                }
+                envOverrides.forEach { (k, v) ->
+                    append("export ").append(k).append("='").append(v).append("'; ")
+                }
+                // Bun needs a writable temp dir (no /tmp on Android) and the
+                // GNU C++ runtime next to the musl loader
+                append("export TMPDIR='").append(cacheDir.absolutePath).append("'; ")
+                append("export LD_LIBRARY_PATH='").append(NodeRuntime.pkgDir(this@OpencodeWebService).absolutePath).append("'; ")
+                append("echo $$ > '").append(servePidFile.absolutePath).append("'; ")
+                append("exec '").append(loader).append("' '").append(bin).append("'")
+                append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
+                append(" > '").append(serveLog.absolutePath).append("' 2>&1")
+            }
             if (rootMode) {
                 appendLog("[4] spawning serve via su (root domain)")
                 killStaleServe()
-                // Env goes inline as exports: `su` on some implementations
-                // sanitizes the caller's environment. Serve argv ("opencode
-                // serve --port 4096") doubles as the stale-process pattern.
-                val serveCmd = buildString {
-                    if (workDir.isDirectory) append("cd '").append(workDir.absolutePath).append("'; ")
-                    NodeRuntime.environment(this@OpencodeWebService).forEach { (k, v) ->
-                        // serve needs no proxy: Bun's HTTP server stalls when one
-                        // is configured (it routes its own listener through it)
-                        if (k.endsWith("_PROXY")) return@forEach
-                        if (v.none { it == ' ' || it == '\'' || it == ';' || it == '$' }) {
-                            append("export ").append(k).append("='").append(v).append("'; ")
-                        }
-                    }
-                    envOverrides.forEach { (k, v) ->
-                        append("export ").append(k).append("='").append(v).append("'; ")
-                    }
-                    // Bun needs a writable temp dir (no /tmp on Android) and the
-                    // GNU C++ runtime next to the musl loader
-                    append("export TMPDIR='").append(cacheDir.absolutePath).append("'; ")
-                    append("export LD_LIBRARY_PATH='").append(NodeRuntime.pkgDir(this@OpencodeWebService).absolutePath).append("'; ")
-                    append("echo $$ > '").append(servePidFile.absolutePath).append("'; ")
-                    append("exec '").append(loader).append("' '").append(bin).append("'")
-                    append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
-                    append(" > '").append(serveLog.absolutePath).append("' 2>&1")
-                }
                 p = ProcessBuilder("su", "-c", serveCmd).apply { redirectErrorStream(true) }.start()
                 spawnedViaRoot = true
             } else if (shizukuMode) {
                 appendLog("[4] spawning serve via Shizuku (shell uid + run-as)")
                 killStaleServeViaRunAs()
-                // Same inline-export command as the su path, but everything the
-                // serve process must WRITE lives under /data/local/tmp: run-as
-                // only changes the uid, the SELinux domain stays shell, and the
-                // shell domain may read but not write app data. The existing
-                // config is copied over so the webui keeps the user's settings.
-                val ocHome = "/data/local/tmp/oc-home"
-                val ocTmp = "/data/local/tmp/oc-tmp"
-                val ocLog = "$ocTmp/serve.log"
-                val serveCmd = buildString {
-                    append("mkdir -p '").append(ocHome).append("' '").append(ocTmp).append("'; ")
-                    append("cp -r '").append(NodeRuntime.homeDir(this@OpencodeWebService).absolutePath)
-                        .append("/.config' '").append(ocHome).append("/' 2>/dev/null; ")
-                    if (workDir.isDirectory) append("cd '").append(workDir.absolutePath).append("' 2>/dev/null; ")
-                    NodeRuntime.environment(this@OpencodeWebService).forEach { (k, v) ->
-                        if (k.endsWith("_PROXY") || k == "HOME" || k == "TMPDIR" || k == "LD_LIBRARY_PATH") return@forEach
-                        if (v.none { it == ' ' || it == '\'' || it == ';' || it == '$' }) {
-                            append("export ").append(k).append("='").append(v).append("'; ")
-                        }
-                    }
-                    envOverrides.forEach { (k, v) ->
-                        append("export ").append(k).append("='").append(v).append("'; ")
-                    }
-                    append("export HOME='").append(ocHome).append("'; ")
-                    append("export TMPDIR='").append(ocTmp).append("'; ")
-                    append("export LD_LIBRARY_PATH='").append(NodeRuntime.pkgDir(this@OpencodeWebService).absolutePath).append("'; ")
-                    append("echo $$ > '").append(ocTmp).append("/serve.pid'; ")
-                    append("exec '").append(loader).append("' '").append(bin).append("'")
-                    append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
-                    append(" > '").append(ocLog).append("' 2>&1")
+                // run-as re-enters the app's private data as our own uid in the
+                // runas_app domain — same file paths as every other mode. One
+                // caveat: files created by earlier root-spawned serves are
+                // root-owned and unwritable for us, so probe first and tell
+                // the user exactly what to fix.
+                val probe = runCatching {
+                    val t = ShizukuHelper.newProcess(
+                        listOf("run-as", packageName, "sh", "-c",
+                            "touch '" + NodeRuntime.homeDir(this@OpencodeWebService).absolutePath +
+                                "/.shizuku-write-probe' && rm '" +
+                                NodeRuntime.homeDir(this@OpencodeWebService).absolutePath + "/.shizuku-write-probe'"),
+                        null,
+                    )
+                    t.waitFor() == 0
+                }.getOrDefault(false)
+                if (!probe) {
+                    OpencodeState.lastError = "Shizuku 路径预检失败：home 目录存在 root 运行残留的文件属主。请在本机用 root 执行 chown -R 修复，或重新初始化运行时"
+                    notify(OpencodeState.lastError!!)
+                    appendLog("[4] run-as write probe failed: root-owned files under home")
+                    return
                 }
                 // serveCmd carries its own single quotes, so pass it as a
                 // standalone argv instead of wrapping it in another shell layer
