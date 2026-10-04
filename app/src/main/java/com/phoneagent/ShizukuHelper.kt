@@ -66,22 +66,25 @@ object ShizukuHelper {
      * see its own listeners otherwise (it can only blind-probe them).
      */
     fun listeningPorts(): List<Int> {
-        if (!granted()) return listOf<Int>()
-        val ports: List<Int> = try {
+        if (!granted()) return emptyList()
+        val out = ArrayList<Int>()
+        try {
             val p = sh("cat /proc/net/tcp /proc/net/tcp6 2>/dev/null")
             val text = p.inputStream.bufferedReader().use { it.readText() }
             p.waitFor()
-            text.lineSequence().drop(1)
-                .map { it.trim().split(WHITESPACE) }
-                // state 0A = TCP_LISTEN; local_address is HOST:PORT in hex
-                .filter { it.size > 3 && it[3] == "0A" }
-                .mapNotNull { it[1].substringAfter(':').toIntOrNull(16) }
-                .distinct()
-                .sorted()
+            for (line in text.lineSequence().drop(1)) {
+                // sl local_address rem_address st ...; 0A = TCP_LISTEN
+                val cols = line.trim().split(WHITESPACE)
+                if (cols.size <= 3) continue
+                if (cols[3] != "0A") continue
+                val port = cols[1].substringAfter(':').toIntOrNull(16) ?: continue
+                if (port !in out) out.add(port)
+            }
         } catch (_: Exception) {
-            emptyList()
+            return emptyList()
         }
-        return ports
+        out.sort()
+        return out
     }
 
     /** Human-readable listening-port table, one line per port. */
