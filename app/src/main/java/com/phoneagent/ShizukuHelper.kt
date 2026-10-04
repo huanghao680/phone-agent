@@ -67,7 +67,7 @@ object ShizukuHelper {
      */
     fun listeningPorts(): List<Int> {
         if (!granted()) return listOf<Int>()
-        return try {
+        val ports: List<Int> = try {
             val p = sh("cat /proc/net/tcp /proc/net/tcp6 2>/dev/null")
             val text = p.inputStream.bufferedReader().use { it.readText() }
             p.waitFor()
@@ -79,8 +79,9 @@ object ShizukuHelper {
                 .distinct()
                 .sorted()
         } catch (_: Exception) {
-            listOf<Int>()
+            emptyList()
         }
+        return ports
     }
 
     /** Human-readable listening-port table, one line per port. */
