@@ -257,6 +257,18 @@ class SettingsActivity : ComponentActivity() {
                                     ui { shizukuLog = lines.joinToString("\n") }
                                 }
                             }
+                            UpdateRow("授权「所有文件访问」（Shizuku）", enabled = ShizukuHelper.granted()) {
+                                threadRun {
+                                    val lines = ShizukuHelper.grantAllFilesAccess()
+                                    ui { shizukuLog = lines.joinToString("\n") }
+                                }
+                            }
+                            UpdateRow("查看监听端口（Shizuku）", enabled = ShizukuHelper.granted()) {
+                                threadRun {
+                                    val lines = ShizukuHelper.portReport()
+                                    ui { shizukuLog = lines }
+                                }
+                            }
                             if (shizukuLog.isNotEmpty()) {
                                 Spacer(Modifier.height(8.dp))
                                 M3Text(shizukuLog, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)
