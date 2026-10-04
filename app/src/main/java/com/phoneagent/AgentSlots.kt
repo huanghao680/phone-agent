@@ -193,6 +193,18 @@ object AgentSlots {
         return if (s.state == "verifying") 1 else 0
     }
 
+    /**
+     * Records the version actually present in the active slot. The APK-driven
+     * upgrade installs into the active slot while a State already exists;
+     * without this the recorded activeVersion goes stale and every boot would
+     * re-run the (expensive) pinned reinstall.
+     */
+    fun setActiveVersion(ctx: Context, pkg: String, version: String) {
+        val s = read(ctx, pkg) ?: return
+        if (s.activeVersion == version) return
+        write(ctx, pkg, State(s.active, version, s.standby, s.standbyVersion, s.state))
+    }
+
     /** Verification succeeded: the previous tree stays as the rollback target. */
     fun markBootOk(ctx: Context, pkg: String) {
         val s = read(ctx, pkg) ?: return

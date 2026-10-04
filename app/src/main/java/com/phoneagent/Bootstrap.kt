@@ -133,6 +133,7 @@ object Bootstrap {
                 if (s == null) {
                     AgentSlots.initActive(ctx, pkg, version)
                 } else {
+                    AgentSlots.setActiveVersion(ctx, pkg, version)
                     onLine("[phone-agent] $pkg 现役槽已更新到 $version")
                 }
             }
