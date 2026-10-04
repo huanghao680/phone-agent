@@ -181,7 +181,9 @@ class OpencodeWebService : Service() {
                     append(" serve --port 4096 --hostname 127.0.0.1 --print-logs")
                     append(" > '").append(ocLog).append("' 2>&1")
                 }
-                p = ShizukuHelper.sh("run-as " + packageName + " sh -c '" + serveCmd + "'")
+                // serveCmd carries its own single quotes, so pass it as a
+                // standalone argv instead of wrapping it in another shell layer
+                p = ShizukuHelper.newProcess(listOf("run-as", packageName, "sh", "-c", serveCmd), null)
                 spawnedViaShizuku = true
             } else {
                 appendLog("[4] spawning serve in app domain")
