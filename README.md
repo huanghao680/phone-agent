@@ -158,6 +158,7 @@ workspace 外写入   → 拒绝（Permission denied；真实文件系统无残�
 - **`zcode` 报 EACCES（写配置失败）**：Android 11+ SELinux 禁应用域 `link()`；非 root 走 `rename` 预置，root 用户可点"安装系统级命令"让模块放行。
 - **后台会话被杀**：root 用户执行"修复幻象进程限制"；同时给 App 关闭电池优化。
 - **dsh 打不开**：设置页填 DeepSeek API Key；看 `cache/dsh.log`（App 私有目录）。
+- **Claude Code 报 `EAI_AGAIN` / 无法连接 api.anthropic.com**：Codex/Claude 的 TUI 会话继承设置里的 HTTP 代理变量；在需要代理的网络（国内直连不了 Anthropic/OpenAI）务必先填代理再启动。Claude 启动即做连通性检查，Codex 到登录/调用时才会暴露。
 - **`read_image` 或 `glob`/`grep` 失效**：多半是 agent 自更新把补丁冲掉了——重开一次 App（或跑一次设置页的更新）会重跑补丁器；日志里会有 `[phone-agent] …patched` 记录。
 - **通知不显示**：Android 13+ 在系统设置里手动允许通知（不影响功能）。
 
