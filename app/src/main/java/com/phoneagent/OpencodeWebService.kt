@@ -198,8 +198,8 @@ class OpencodeWebService : Service() {
             proc = p
             // su client errors (denial, daemon unreachable) print to stderr —
             // capture them, otherwise a failed root spawn is fully silent
-            thread(name = "opencode-su-log") {
-                p.inputStream.bufferedReader().forEachLine { line -> appendLog("[su] $line") }
+            thread(name = "opencode-spawn-log") {
+                p.inputStream.bufferedReader().forEachLine { line -> appendLog("[spawn] $line") }
             }
             notify("等待 opencode 就绪…")
             val ready = awaitHttpReady(timeoutMs = 60_000, child = p)

@@ -159,6 +159,30 @@ class SettingsActivity : ComponentActivity() {
                                     ui { updateStatus = log.toString() }
                                 }
                             }
+                            UpdateRow("更新 codex", enabled = updateInfos?.firstOrNull { it.name == "codex" }?.updateAvailable == true) {
+                                updateStatus = "更新 codex 中…"
+                                threadRun {
+                                    val log = StringBuilder()
+                                    doUpdateBinary("codex", log)
+                                    ui { updateStatus = log.toString() }
+                                }
+                            }
+                            UpdateRow("更新 claude", enabled = updateInfos?.firstOrNull { it.name == "claude" }?.updateAvailable == true) {
+                                updateStatus = "更新 claude 中…"
+                                threadRun {
+                                    val log = StringBuilder()
+                                    doUpdateBinary("claude", log)
+                                    ui { updateStatus = log.toString() }
+                                }
+                            }
+                            UpdateRow("更新 opencode", enabled = updateInfos?.firstOrNull { it.name == "opencode" }?.updateAvailable == true) {
+                                updateStatus = "更新 opencode 中…"
+                                threadRun {
+                                    val log = StringBuilder()
+                                    doUpdateBinary("opencode", log)
+                                    ui { updateStatus = log.toString() }
+                                }
+                            }
                             M3Text(
                                 "更新装入备用槽，下次启动切换；启动失败自动回滚。",
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -358,6 +382,15 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun doUpdateBinary(agent: String, log: StringBuilder) {
+        val info = updateInfos?.firstOrNull { it.name == agent }
+        if (info == null || !info.updateAvailable) {
+            log.appendLine("[update] $agent 无可用更新（先检查更新）")
+            return
+        }
+        AgentUpdate.updateBinaryAgent(this@SettingsActivity, agent, info.latest) { line -> log.appendLine(line) }
     }
 
     private fun doUpdate(pkg: String, log: StringBuilder) {

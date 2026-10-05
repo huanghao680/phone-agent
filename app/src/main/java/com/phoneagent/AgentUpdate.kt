@@ -281,8 +281,15 @@ object AgentUpdate {
         return AgentSlots.rollback(ctx, short, onLine)
     }
 
-    /** Binary agents (codex/claude): download platform tgz to pkg and re-extract. */
+    /** Binary agents (codex/claude/opencode): download platform tgz to pkg and re-extract. */
     fun updateBinaryAgent(ctx: Context, agent: String, version: String, onLine: (String) -> Unit): Boolean {
+        // never downgrade: the settings rows are driven by the cached check,
+        // which may be older than what a previous update already installed
+        val installed = BinaryAgents.installedVersion(ctx, agent)
+        if (installed != null && AgentSlots.compareVersions(installed, version) >= 0) {
+            onLine("[update] $agent 已是 $installed（>= $version），跳过")
+            return true
+        }
         val tarball = when (agent) {
             BinaryAgents.CODEX -> "${registry(ctx)}/@openai/codex/-/codex-$version-linux-arm64.tgz"
             BinaryAgents.CLAUDE -> "${registry(ctx)}/@anthropic-ai%2fclaude-code-linux-arm64-musl/-/claude-code-linux-arm64-musl-$version.tgz"
@@ -296,7 +303,12 @@ object AgentUpdate {
         File(NodeRuntime.pkgDir(ctx), ".$agent-version").delete()
         val ok = BinaryAgents.ensure(ctx, agent, onLine)
         if (ok) {
-            onLine("[update] $agent 更新完成 ✅")
+            // ensure records the BUNDLED version as the marker; record the
+            // version actually installed, or the update would keep showing
+            // as available and re-downloading forever
+            File(NodeRuntime.pkgDir(ctx), ".$agent-version").writeText(version)
+            val note = if (agent == BinaryAgents.OPENCODE) "（重启 opencode webui 后生效）" else ""
+            onLine("[update] $agent 更新完成 ✅ $version $note")
         }
         return ok
     }
