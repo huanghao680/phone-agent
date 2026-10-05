@@ -163,7 +163,8 @@ class SettingsActivity : ComponentActivity() {
                                 updateStatus = "更新 codex 中…"
                                 threadRun {
                                     val log = StringBuilder()
-                                    doUpdateBinary("codex", log)
+                                    val ver = updateInfos?.firstOrNull { it.name == "codex" }?.latest
+                                    doUpdateBinary("codex", ver, log)
                                     ui { updateStatus = log.toString() }
                                 }
                             }
@@ -171,7 +172,8 @@ class SettingsActivity : ComponentActivity() {
                                 updateStatus = "更新 claude 中…"
                                 threadRun {
                                     val log = StringBuilder()
-                                    doUpdateBinary("claude", log)
+                                    val ver = updateInfos?.firstOrNull { it.name == "claude" }?.latest
+                                    doUpdateBinary("claude", ver, log)
                                     ui { updateStatus = log.toString() }
                                 }
                             }
@@ -179,7 +181,8 @@ class SettingsActivity : ComponentActivity() {
                                 updateStatus = "更新 opencode 中…"
                                 threadRun {
                                     val log = StringBuilder()
-                                    doUpdateBinary("opencode", log)
+                                    val ver = updateInfos?.firstOrNull { it.name == "opencode" }?.latest
+                                    doUpdateBinary("opencode", ver, log)
                                     ui { updateStatus = log.toString() }
                                 }
                             }
@@ -384,13 +387,12 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    private fun doUpdateBinary(agent: String, log: StringBuilder) {
-        val info = updateInfos?.firstOrNull { it.name == agent }
-        if (info == null || !info.updateAvailable) {
+    private fun doUpdateBinary(agent: String, version: String?, log: StringBuilder) {
+        if (version == null) {
             log.appendLine("[update] $agent 无可用更新（先检查更新）")
             return
         }
-        AgentUpdate.updateBinaryAgent(this@SettingsActivity, agent, info.latest) { line -> log.appendLine(line) }
+        AgentUpdate.updateBinaryAgent(this, agent, version) { line -> log.appendLine(line) }
     }
 
     private fun doUpdate(pkg: String, log: StringBuilder) {
