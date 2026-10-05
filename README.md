@@ -2,14 +2,15 @@
 
 把 [Zcode](https://github.com/zai-org/ZCode) 与 [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness) 装进安卓手机本机运行的**独立 APP**——不依赖 Termux 应用，root 可选。
 
-> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.28**（versionCode 45），dsh **0.2.0-rc.2**。
+> UI 采用 [Miuix](https://github.com/compose-miuix-ui/miuix)（HyperOS 风格 Compose 组件库，与 [InstallerX Revived](https://github.com/wxxsfxyzm/InstallerX-Revived) 同款）+ Jetpack Compose。当前版本 **0.7.72**（versionCode 89）；组件版本：zcode **3.14.4-30**、dsh **0.2.0-rc.2**、opencode **1.18.34**、codex **0.160.0**、claude **2.1.287**。
 
-三个桌面图标：
+四个桌面图标：
 
 | 图标 | 形态 | 实现 |
 |---|---|---|
 | **Zcode** | 横屏全屏 Web UI | 官方 `packages/web` SPA + Hono 服务端（CI 构建），内嵌 Node 起 127.0.0.1:3030，WebView 呈现 |
 | **DeepSeek Harness** | 横屏全屏 Web UI | 内嵌 Node 起 `dsh web`（127.0.0.1:3080），WebView 呈现 |
+| **opencode** | 横屏全屏 Web UI | `opencode serve`（127.0.0.1:4096），Bun 单文件经 musl loader 启动，WebView 呈现 |
 | **终端** | TUI 选择器 | 五选一：**zcode TUI / dsh TUI / Codex CLI / Claude Code / opencode**（Termux 终端模拟器 + 真实 PTY），页内还有**用量统计**与**设置**入口 |
 
 外加**可选的 root 深度集成**：一键安装 Magisk 模块，把 `zcode` / `dsh` 命令装进 `/system/bin`，之后机内任意终端可执行，且运行时不需要 root。
@@ -28,8 +29,10 @@ Phone-Agent.apk
 │
 ├─ [Zcode 图标]   ZcodeWebService  ──> node zcode-server ──> WebView(127.0.0.1:3030)
 ├─ [DSH 图标]     DshService(前台)   ──> node dsh web      ──> WebView(127.0.0.1:3080)
-├─ [终端图标]     TerminalPicker ──> TerminalView(PTY) ──> zcode/dsh TUI、codex、claude
-├─ [设置]         API Key（加密存储）/ npm 镜像 / HTTP 代理 / 工作区 / 存储诊断 / Agent 更新 / root 集成
+├─ [opencode 图标] OpencodeWebService ──> opencode serve ──> WebView(127.0.0.1:4096)
+│                  spawn 顺序：root(su) → Shizuku(run-as，免 root) → 应用域直启
+├─ [终端图标]     TerminalPicker ──> TerminalView(PTY) ──> zcode/dsh TUI、codex、claude、opencode
+├─ [设置]         API Key（加密存储）/ npm 镜像 / HTTP 代理 / 工作区 / 存储诊断 / Agent 更新 / Shizuku / root 集成
 └─ root 开关 ──> Magisk 模块 phone_agent（/system/bin/zcode、/system/bin/dsh + sepolicy.rule）
 ```
 
@@ -59,11 +62,21 @@ opencode 是 **Bun 单文件可执行文件**（185 MiB），官方只有 glibc/
 ld-musl-aarch64.so.1 opencode      # + LD_LIBRARY_PATH 含 libstdc++.so.6 / libgcc_s.so.1
 ```
 
-三者都取自 Alpine Linux v3.20 aarch64（`musl`、`libstdc++`、`libgcc`），与彼此同源，实测 `opencode --version` → `1.18.33`、TUI 完整渲染。
+三者都取自 Alpine Linux v3.20 aarch64（`musl`、`libstdc++`、`libgcc`），与彼此同源，实测 `opencode --version` → `1.18.x`、TUI 完整渲染。
 
 还有一个 Android 专属坑：**Bun 会在 `$TMPDIR` 下自解压**。Android 既没有 `/tmp`（根分区只读），继承来的 `/data/local/tmp` 又会 `EACCES`；启动脚本把 `TMPDIR` **钉死在 App 缓存目录**才起得来。
 
-- 形态：终端选择器第五项 **opencode TUI**（真实 PTY）；它自带 `serve` / `web` 子命令，后续可按需加 Web UI 入口。
+- 形态：终端选择器第五项 **opencode TUI**（真实 PTY），另有第四个桌面图标 **opencode webui**（`opencode serve`，127.0.0.1:4096）。
+
+### opencode serve 的三种 spawn 模式（为什么需要 Shizuku）
+
+Bun 进程由 App（应用域）直接 spawn 时会被 **Android 给应用进程安装的 seccomp 过滤器**立即杀死（`SIGSYS`，`Bad system call`）——实测排除了 SELinux（`setenforce 0` 后仍失败）、端口占用与环境影响；而同一二进制经 `su`（root 域）或 `run-as`（adbd/shell 域 fork 的进程不带 zygote 的 seccomp）都能正常 `listening`。因此 serve 的 spawn 顺序为：
+
+1. **root**：`su -c`（环境变量以内联 export 传入，`su` 会净化调用方环境）；
+2. **Shizuku**（免 root）：shell uid 经 `run-as` 回到应用数据目录——adbd/Shizuku fork 的进程不带该 seccomp 过滤器；此路径需 debug 构建（`run-as` 要求）；
+3. **应用域直启**：保留作为占位，失败时明确提示 seccomp 限制与非 root 替代方案。
+
+已知边界：`run-as` 只改 uid 不改 SELinux 域（shell 域对应用数据**可读不可写**），因此 root 模式运行过的残留文件会让 Shizuku 路径预检失败并给出明确指引；serve 的就绪探测优先读 Shizuku 的 `/proc/net/tcp` 端口表（Android 11+ 对 App 隐藏该文件）。
 
 ## Android 适配层（本项目的主要工作之一）
 
@@ -157,6 +170,25 @@ zcode / dsh 的更新与 Android 系统更新同一套契约（真机验证过�
 - 设置页的 Agent 更新区有 **回滚** 按钮（有备用版本时才出现）。
 - **手动更新不会被降级**：APK 内置版本只在「现役版本缺失或更旧」时才重装，手动更新到更新版本后不会被钉回内置版。
 - **Agent 无法破坏机制**：工作区与 `~/.dsh/` 会种入 `AGENTS.md`（两个 CLI 都自动读入上下文），写明环境事实与更新政策（禁止 `npm i -g` 之类全局安装）；启动时还有**槽位完整性校验**——若现役树版本与记录不符（会话内被改动），会采用实际版本并重打 Android 补丁。
+- **更新检查走内嵌 Node**：registry 查询与 tgz 下载都优先经内嵌 Node（代理变量已在会话环境注入）；`HttpURLConnection` 在 https-over-CONNECT 代理下会超时（真机实测 5 个包里 4 个失败而 Node 全部成功），Java 路径仅作回退。binary agent（codex/claude/opencode）查 `/latest` 而非锁定版本，否则打包升级永远查不到新版本。
+- **APK 驱动升级会回写实际版本**：自动升级装入现役槽后把真实版本写回 `slot.json`——否则 `activeNeedsPinned` 每次启动都会误判"更旧"而反复重装。
+
+## Shizuku 集成（免 root 的 adb 权限，实测可用）
+
+[Shizuku](https://github.com/RikkaApps/Shizuku) 把 adb 级（shell uid）的 binder 暴露给普通应用：用户安装 Shizuku 管理器并启动其服务（Android 11+ 可用无线调试、或连电脑 adb、root 设备可直接 root 启动；**每次重启后需重新启动**）。本项目用它做两类事：
+
+1. **opencode webui 的免 root 启动**（见上文三种 spawn 模式）；
+2. **一组 shell 权限工具**（设置页 Shizuku 卡片，逐条真机验证）：
+
+| 工具 | 为什么 App 自己做不到 | 实现 |
+|---|---|---|
+| 修复幻象进程限制 | 需要 `WRITE_SECURE_SETTINGS` | `device_config put` + `settings put` |
+| 授权「所有文件访问」 | `appops` 只有 shell 能改别的 uid | `appops set --uid <uid> MANAGE_EXTERNAL_STORAGE allow`（授权前后状态都会显示） |
+| 查看监听端口 | Android 11+ 对 App 隐藏 `/proc/net`，App 只能盲探测 | 读 `/proc/net/tcp` 生成带用途标注的端口表（如 `4096 [opencode webui]`） |
+| 加入电池优化白名单 | App 无法把自己加进 Doze 白名单；不加则前台服务与 agent 会话后台被杀 | `dumpsys deviceidle whitelist +<pkg>` |
+| 授予通知权限 | Android 13+ 运行时权限，被拒时服务失败完全不可见 | `pm grant POST_NOTIFICATIONS` |
+
+边界（Android 13+ 实测，shell uid 也做不了）：特权端口绑定（<1024 `EACCES`）、读取其他应用的私有数据、静默安装 APK（`INSTALL_PACKAGES` 虽在 shell 权限表里但安装框架仍拦截）、纯 shell 域访问应用私有目录（SELinux 拦截，所以必须 `run-as`）。
 
 ## dsh 插件系统（第三方插件实测可用）
 
@@ -183,7 +215,7 @@ dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh
 - **`/tmp` 不存在**（Android 根分区只读）；非沙盒环境请用 `$TMPDIR`，沙盒内 `/tmp` 可用。
 - **zcode 的 WebFetch 工具在本环境不可用**：两个 URL 都卡满 60s 工具上限，而同一 URL 用 Node `fetch` 3 秒即返回 200——其客户端是 bundle 内的自定义实现，属上游缺陷；替代做法是用 bash + node 抓取。
 - **`pkg` 命令能跑但没有后端 `apt`**（未打包），需要包管理时用 `npm`。
-- **opencode 仍未接入**：官方单文件二进制是 glibc 版 Bun，无 bionic 目标。
+- **opencode 的 App 域直启被 seccomp 拦截**：Bun 需要的系统调用在应用进程的 seccomp 白名单外（`SIGSYS`/`Bad system call`），因此 webui 在非 root 设备上需要 **Shizuku**（见上文），或 root 设备的 `su` 路径；opencode TUI 不受影响（终端选择器第五项）。
 - **16KB 页对齐**：`libandroidx.graphics.path.so`（来自 compose 1.8-beta 一线）未对齐，Android 15+ 会有调试警告，不影响运行；`libtermux.so` 已处理。
 
 ## 开发者
@@ -208,15 +240,23 @@ dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh
 
 ## 真机验证状态
 
-| 设备 | 系统 | Zcode Web | dsh Web | 终端 TUI | root 集成 |
-|---|---|---|---|---|---|
-| 乐视 Le Max 2 | LineageOS 18.1（Android 11）+ KernelSU | ✅ | ✅ | ✅ zcode/dsh/codex/claude | ✅ |
-| 小米平板 4 | Android 17 + Magisk | ✅ | ✅ | ✅ | 未测（逻辑一致） |
-| vivo V2048A | Android 13，**无 root** | ✅ | ✅ | ✅（`rename` 预置配置，无需 root） | 不适用 |
-| Redmi K60 | Android 16 / 澎湃 OS3 | ✅ | ✅ | ✅ | 未测 |
-| 小米平板 6 Pro | Android 15 / 澎湃 OS3 | ✅ | ✅ | ✅ | 未测 |
+| 设备 | 系统 | Zcode Web | dsh Web | 终端 TUI | opencode Web | Shizuku 工具 | root 集成 |
+|---|---|---|---|---|---|---|---|
+| 乐视 Le Max 2 | LineageOS 18.1（Android 11）+ KernelSU | ✅ | ✅ | ✅ zcode/dsh/codex/claude/opencode | ✅（root 域） | ✅ | ✅ |
+| 小米平板 4 | Android 17 + Magisk | ✅ | ✅（A/B 从 0.1.5-rc.3 跨大版本升到 0.2.0-rc.2，插件页正常） | ✅ zcode/dsh/codex/claude/opencode | ✅（**Shizuku 免 root 路径**） | ✅ 五条全部实测 | ✅ |
+| vivo V2048A | Android 13，**无 root** | ✅ | ✅ | ✅（`rename` 预置配置，无需 root） | 需 Shizuku（未测） | 未测 | 不适用 |
+| Redmi K60 | Android 16 / 澎湃 OS3 | ✅ | ✅ | ✅ | 需 Shizuku（未测） | 未测 | 未测 |
+| 小米平板 6 Pro | Android 15 / 澎湃 OS3 | ✅ | ✅ | ✅ | 需 Shizuku（未测） | 未测 | 未测 |
 
 沙盒与工具链的完整自测由 dsh / zcode 两个 CLI 在设备上自行跑出报告（`selftest/` 目录），逐项含命令与原始输出。
+
+最近一轮全量自测（v0.7.72，2026-10-04，小米平板 4 + 乐视）：
+
+- **A/B 槽位**：legacy 直装布局（zcode 3.14.3-28 / dsh 0.1.5-rc.3）自动迁移到双槽并跨大版本升级到 zcode 3.14.4-30 / dsh 0.2.0-rc.2，升级后 zcode CLI、dsh web（含插件页 8 个官方插件）全部正常；
+- **失败自动回滚**：手工构造损坏的备用槽后启动，`beginBoot` 切换 → 验证失败 → 自动回滚并重试成功，槽位回到 verified；
+- **opencode**：Shizuku 路径 webui HTTP 200 + 界面完整渲染（非 root），TUI 完整渲染；
+- **Shizuku 工具**：幻象进程修复 / 全文件访问授权 / 端口表 / 电池白名单 / 通知权限，五条逐一执行并用 adb shell 独立核实状态；
+- **zcode web**：升级后 3030 正常出欢迎页（HTTP 200）。
 
 ## 许可证
 
