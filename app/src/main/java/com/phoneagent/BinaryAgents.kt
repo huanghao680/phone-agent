@@ -58,14 +58,28 @@ object BinaryAgents {
      * the binary, so the whole package/vendor directory is preserved relative
      * to the extracted binary. Claude is a single loader-launched binary.
      */
-    fun ensure(ctx: Context, agent: String, onLine: (String) -> Unit): Boolean {
-        if (isReady(ctx, agent)) return true
+    /**
+     * [force] re-extracts even when a binary is already present. An update
+     * downloads a new tgz over the same path, but the tree from the previous
+     * version is still sitting there, so the plain "already ready" shortcut
+     * would leave the OLD binary in place while reporting success.
+     */
+    fun ensure(ctx: Context, agent: String, onLine: (String) -> Unit, force: Boolean = false): Boolean {
+        if (!force && isReady(ctx, agent)) return true
         val tgz = assetTgz(ctx, agent)
         if (!tgz.exists()) {
             onLine("[binary] $agent 未打包（当前构建未包含）")
             return false
         }
         onLine("[binary] 解压 $agent ...")
+        if (force) {
+            // drop the previous tree: tar only overwrites entries it contains
+            when (agent) {
+                CODEX -> File(pkg(ctx), "vendor").deleteRecursively()
+                CLAUDE -> File(pkg(ctx), "claude").delete()
+                else -> File(pkg(ctx), agent).delete()
+            }
+        }
         try {
             GZIPInputStream(tgz.inputStream()).use { gz ->
                 TarArchiveInputStream(gz).use { tar ->
