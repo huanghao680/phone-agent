@@ -86,7 +86,7 @@ object AgentUpdate {
      * and the Java path times out through the proxy where Node's fetch works.
      */
     private fun download(ctx: Context, url: String, out: File, onFail: (String) -> Unit): Boolean {
-        nodeDownload(ctx, url, out)?.let { return it }
+        nodeDownload(ctx, url, out, onFail)?.let { return it }
         return try {
             val conn = open(ctx, url)
             conn.connectTimeout = 15_000
@@ -100,30 +100,35 @@ object AgentUpdate {
     }
 
     /** Fetch [url] to [out] with the embedded Node. Null when Node is unusable. */
-    private fun nodeDownload(ctx: Context, url: String, out: File): Boolean? {
+    private fun nodeDownload(ctx: Context, url: String, out: File, onFail: (String) -> Unit): Boolean? {
         val node = NodeRuntime.nodeBin(ctx)
         if (!node.canExecute()) return null
         val tmp = File(out.absolutePath + ".part")
+        // fetch() returns a WEB ReadableStream — it has no .pipe(); adapt it
+        // with Readable.fromWeb before piping into the createWriteStream
         val script = "const{createWriteStream}=require('fs');" +
+            "const{Readable}=require('stream');" +
             "fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);" +
             "const w=createWriteStream(process.argv[2]);" +
-            "return new Promise((res,rej)=>{r.body.pipe(w);w.on('finish',res);w.on('error',rej)})})" +
+            "return new Promise((res,rej)=>{Readable.fromWeb(r.body).pipe(w);w.on('finish',res);w.on('error',rej)})})" +
             ".then(()=>process.exit(0)).catch(e=>{process.stderr.write(String(e.message));process.exit(1)})"
         return try {
             val pb = ProcessBuilder(node.absolutePath, "-e", script, url, tmp.absolutePath)
             pb.environment().putAll(NodeRuntime.environment(ctx))
             pb.redirectErrorStream(true)
             val p = pb.start()
-            p.inputStream.bufferedReader().readText()
+            val text = p.inputStream.bufferedReader().readText()
             val rc = p.waitFor()
             if (rc == 0 && tmp.exists() && tmp.length() > 0) {
                 tmp.renameTo(out)
                 true
             } else {
                 tmp.delete()
-                false // Node ran and failed: report it rather than retrying Java
+                onFail(text.trim().ifEmpty { "node 退出码 $rc" }) // Node ran and failed: report it rather than retrying Java
+                false
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            onFail(e.message ?: e.javaClass.simpleName)
             null
         }
     }
