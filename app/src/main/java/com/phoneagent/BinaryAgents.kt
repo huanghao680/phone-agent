@@ -24,13 +24,17 @@ object BinaryAgents {
     private fun pkg(ctx: Context): File = NodeRuntime.pkgDir(ctx)
 
     fun isReady(ctx: Context, agent: String): Boolean = when (agent) {
-        CODEX -> File(pkg(ctx), "vendor/aarch64-unknown-linux-musl/bin/codex").exists()
-        CLAUDE -> File(pkg(ctx), "claude").exists() && File(pkg(ctx), "ld-musl-aarch64.so.1").exists()
+        CODEX -> File(pkg(ctx), "vendor/aarch64-unknown-linux-musl/bin/codex").canExecute()
+        CLAUDE -> File(pkg(ctx), "claude").canExecute() &&
+            File(pkg(ctx), "ld-musl-aarch64.so.1").canExecute()
         // opencode is a Bun single-file executable: it needs the musl loader and
-        // the GNU C++ runtime it was linked against (both shipped as assets)
-        OPENCODE -> File(pkg(ctx), "opencode").exists() &&
-            File(pkg(ctx), "ld-musl-aarch64.so.1").exists() &&
-            File(pkg(ctx), "libstdc++.so.6").exists()
+        // the GNU C++ runtime it was linked against (both shipped as assets).
+        // The exec bits matter: the app domain can mmap without them, but the
+        // root/Shizuku spawns exec the loader and fail with EACCES otherwise.
+        OPENCODE -> File(pkg(ctx), "opencode").canExecute() &&
+            File(pkg(ctx), "ld-musl-aarch64.so.1").canExecute() &&
+            File(pkg(ctx), "libstdc++.so.6").exists() &&
+            File(pkg(ctx), "libgcc_s.so.1").exists()
         else -> false
     }
 

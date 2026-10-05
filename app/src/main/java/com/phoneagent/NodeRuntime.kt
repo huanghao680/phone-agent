@@ -133,7 +133,16 @@ object NodeRuntime {
         // repair exec bits without re-staging: old builds wrote the loader/rg
         // mode 600 and copyAssetIfChanged used to skip the chmod on size match,
         // so upgrades never healed it (Magisk su exec failed EACCES on it)
-        for (name in arrayOf("ld-musl-aarch64.so.1", "rg")) {
+        // Exec-bit self-heal. Asset copies carry no mode, and a file first
+        // written by an old build (mode 600) stays non-executable across
+        // upgrades forever. The app domain can mmap these without the bit, but
+        // the root/Shizuku spawn execs the loader directly — that is what
+        // surfaced as "can't execute: Permission denied" on Magisk.
+        for (name in arrayOf(
+            "ld-musl-aarch64.so.1", "rg",
+            // opencode's GNU C++ runtime, loaded through the same loader path
+            "libstdc++.so.6", "libgcc_s.so.1",
+        )) {
             val f = File(pkgDir(ctx), name)
             if (f.exists() && !f.canExecute()) f.setExecutable(true, false)
         }
