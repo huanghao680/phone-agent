@@ -308,7 +308,7 @@ object AgentUpdate {
         File(NodeRuntime.pkgDir(ctx), ".$agent-version").delete()
         // force: the previous tree is still present, so a plain ensure() would
         // short-circuit on isReady() and keep the old binary
-        val ok = BinaryAgents.ensure(ctx, agent, onLine, force = true)
+        val ok = BinaryAgents.ensure(ctx, agent, force = true) { line -> onLine(line) }
         if (ok) {
             // ensure records the BUNDLED version as the marker; record the
             // version actually installed, or the update would keep showing

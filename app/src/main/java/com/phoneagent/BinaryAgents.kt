@@ -64,12 +64,7 @@ object BinaryAgents {
      * version is still sitting there, so the plain "already ready" shortcut
      * would leave the OLD binary in place while reporting success.
      */
-    fun ensure(
-        ctx: Context,
-        agent: String,
-        onLine: (String) -> Unit,
-        force: Boolean = false,
-    ): Boolean {
+    fun ensure(ctx: Context, agent: String, force: Boolean = false, onLine: (String) -> Unit): Boolean {
         if (!force && isReady(ctx, agent)) return true
         val tgz = assetTgz(ctx, agent)
         if (!tgz.exists()) {
