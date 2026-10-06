@@ -178,14 +178,15 @@ object SessionData {
     fun dshAvailable(ctx: Context): Boolean = DshUsage.sessionsRoot(ctx).isDirectory
 
     private class DshParsed(
-        val id: String, val title: String, val dir: File, val cwd: String,
-        val createdAt: Long, val lastAt: Long, val subagent: Boolean,
-        val userMessages: Int, val assistantMessages: Int, val requests: Int,
-        val toolCalls: Int, val retries: Int,
+        val id: String, val dir: File, val cwd: String,
+        val createdAt: Long, val subagent: Boolean,
+        var title: String, var lastAt: Long, var model: String,
+        var userMessages: Int, var assistantMessages: Int, var requests: Int,
+        var toolCalls: Int, var retries: Int,
         var input: Long, var output: Long, var reasoning: Long, var cache: Long,
         val tools: HashMap<String, IntArray>, // name -> [count, errors]
         val models: HashMap<String, LongArray>, // model -> [reqs, in, out, reasoning]
-        val inputs: MutableList<String>, var model: String,
+        val inputs: MutableList<String>,
     )
 
     private fun dshParseAll(ctx: Context): List<DshParsed> {
@@ -214,13 +215,14 @@ object SessionData {
                                     when (t) {
                                         "session" -> {
                                             parsed = DshParsed(
-                                                id = o.optString("id", dir.name), title = "", dir = dir,
+                                                id = o.optString("id", dir.name), dir = dir,
                                                 cwd = o.optString("cwd"), createdAt = o.optLong("createdAt", time),
-                                                lastAt = time, subagent = o.optString("origin") == "subagent",
+                                                subagent = o.optString("origin") == "subagent",
+                                                title = "", lastAt = time, model = "",
                                                 userMessages = 0, assistantMessages = 0, requests = 0,
                                                 toolCalls = 0, retries = 0, input = 0, output = 0, reasoning = 0,
                                                 cache = 0, tools = HashMap(), models = HashMap(),
-                                                inputs = mutableListOf(), model = "",
+                                                inputs = mutableListOf(),
                                             )
                                         }
                                         "session/title" -> parsed?.let {
