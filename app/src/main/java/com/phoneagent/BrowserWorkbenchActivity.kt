@@ -50,12 +50,30 @@ class BrowserWorkbenchActivity : ComponentActivity() {
             var result: Map<String, Any?> = mapOf("error" to "timeout")
             main.post {
                 a.web.evaluateJavascript(EXTRACT_JS) { json ->
-                    result = parseJsObject(json)
+                    val m = parseJsObject(json).toMutableMap()
+                    val lines = consoleLines()
+                    if (lines.isNotEmpty()) m["console"] = lines
+                    m["consoleCleared"] = false
+                    result = m
                     latch.countDown()
                 }
             }
             latch.await(5, TimeUnit.SECONDS)
             return result
+        }
+
+        /** Recent console + JS error lines, surfaced in snapshots. */
+        private val console = java.util.Collections.synchronizedList(ArrayList<String>(20))
+
+        fun consoleLines(): List<String> = synchronized(console) { console.toList() }
+
+        fun clearConsole() = synchronized(console) { console.clear() }
+
+        private fun logConsole(line: String) {
+            synchronized(console) {
+                console.add(line.take(200))
+                if (console.size > 20) console.removeAt(0)
+            }
         }
 
         private fun parseJsObject(json: String): Map<String, Any?> = try {
@@ -110,6 +128,20 @@ class BrowserWorkbenchActivity : ComponentActivity() {
         // isolated workbench: never touches the webUI WebView's state
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean = false
+        }
+        // console telemetry: an agent debugging its own dev server needs the
+        // error output, not just the rendered DOM (Mobile-Harness does the same)
+        web.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onConsoleMessage(m: android.webkit.ConsoleMessage?): Boolean {
+                val mm = m ?: return false
+                logConsole("[${mm.messageLevel()}] ${mm.message()}")
+                return true
+            }
+            override fun onJsAlert(view: WebView?, url: String?, message: String?, r: android.webkit.JsResult?): Boolean {
+                logConsole("[alert] ${message ?: ""}")
+                r?.confirm()
+                return true
+            }
         }
         instance = this
         val url = intent.getStringExtra("url")

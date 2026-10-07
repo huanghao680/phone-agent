@@ -86,40 +86,16 @@ class TerminalPickerActivity : ComponentActivity() {
         val codexAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.CODEX) }
         val claudeAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.CLAUDE) }
         val opencodeAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.OPENCODE) }
-        val choices = listOf(
+        // choices come from the registry; availability is the only local input
+        val choices = AgentRegistry.terminal().map { a ->
+            val ready = if (a.needsAsset) BinaryAgents.isReady(this, a.id) else true
             Choice(
-                "zcode", "Zcode TUI", "Z.ai 的编码 Agent（内嵌 Node，自动安装）", true,
-                iconRes = R.drawable.ic_zcode_fg,
-            ),
-            Choice(
-                "dsh", "DeepSeek Harness TUI", "DeepSeek 官方 Harness（内嵌 Node，自动安装）", true,
-                iconRes = R.drawable.ic_dsh_fg,
-            ),
-            Choice(
-                "codex",
-                "Codex TUI",
-                if (codexAvailable) "OpenAI 的编码 Agent（静态 musl 二进制，安卓原生运行）"
-                else "二进制未就绪：重新打开 APP 解压运行时后再试",
-                codexAvailable,
-                iconRes = R.drawable.ic_codex_fg,
-            ),
-            Choice(
-                "claude",
-                "Claude Code TUI",
-                if (claudeAvailable) "Anthropic 的编码 Agent（musl 二进制 + 自带 loader）"
-                else "二进制未就绪：重新打开 APP 解压运行时后再试",
-                claudeAvailable,
-                iconRes = R.drawable.ic_claude_fg,
-            ),
-            Choice(
-                "opencode",
-                "opencode TUI",
-                if (opencodeAvailable) "开源编码 Agent（Bun 单文件 + musl loader 运行）"
-                else "二进制未就绪：重新打开 APP 解压运行时后再试",
-                opencodeAvailable,
-                iconRes = R.drawable.ic_opencode_fg,
-            ),
-        )
+                a.id, a.label + " TUI",
+                if (ready) a.blurb else a.blurbUnavailable,
+                ready,
+                iconRes = a.iconRes,
+            )
+        }
         Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
             TopAppBar(title = "终端")
             LazyColumn(

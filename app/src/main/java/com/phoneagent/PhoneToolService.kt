@@ -227,6 +227,7 @@ class PhoneToolService : Service() {
                         val snap = BrowserWorkbenchActivity.snapshot()
                         json(snap)
                     }
+                    "/browser-console" -> json(mapOf("console" to BrowserWorkbenchActivity.consoleLines()))
                     "/browser-close" -> {
                         BrowserWorkbenchActivity.close()
                         json(mapOf("closed" to true))
@@ -236,8 +237,17 @@ class PhoneToolService : Service() {
                         if (svc == null) {
                             json(mapOf("error" to "accessibility service not enabled (系统设置-无障碍 开启 phone-agent 设备工具)"))
                         } else {
-                            json(svc.dumpTree())
+                            // mode=interactive keeps only actionable nodes (token-lean);
+                            // diff=true returns +/-/= lines against the previous dump
+                            val interactive = q["mode"] == "interactive"
+                            val diff = q["diff"] == "true"
+                            json(svc.dumpTree(interactive = interactive, diff = diff))
                         }
+                    }
+                    "/a11y-reset" -> {
+                        // drop the diff baseline (e.g. after switching apps)
+                        A11yService.instance?.resetBaseline()
+                        json(mapOf("reset" to true))
                     }
                     "/vdisplay-list" -> json(
                         mapOf(
@@ -264,7 +274,7 @@ class PhoneToolService : Service() {
         mapOf(
             "service" to "phone-agent-tools",
             "endpoints" to listOf(
-                "/status", "/ports", "/ui-dump", "/a11y-dump", "/browser-open", "/browser-snapshot", "/browser-close", "/screenshot", "/tap", "/input",
+                "/status", "/ports", "/ui-dump", "/a11y-dump", "/a11y-reset", "/browser-open", "/browser-snapshot", "/browser-close", "/screenshot", "/tap", "/input",
                 "/key", "/shell", "/clipboard", "/device",
                 "/vdisplay-create", "/vdisplay-destroy", "/vdisplay-launch", "/vdisplay-tap", "/vdisplay-list",
             ),

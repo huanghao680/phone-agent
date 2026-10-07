@@ -133,6 +133,7 @@ class UsageActivity : ComponentActivity() {
                 M3Text("会话管理", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
             }
+            // only agents whose sessions we can actually read
             for (agent in listOf("zcode", "dsh", "opencode")) {
                 item {
                     Card(Modifier.fillMaxSize().clickable { onOpenAgent(agent) }) {
@@ -783,11 +784,7 @@ class UsageActivity : ComponentActivity() {
 
     // ───────────────────────── helpers ─────────────────────────
 
-    private fun agentLabel(agent: String): String = when (agent) {
-        "zcode" -> "Zcode"
-        "dsh" -> "DeepSeek Harness"
-        else -> "opencode"
-    }
+    private fun agentLabel(agent: String): String = AgentRegistry.label(agent)
 
     private fun fmtDate(ms: Long): String =
         if (ms <= 0) "?" else SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date(ms))
