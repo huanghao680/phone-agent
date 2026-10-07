@@ -183,6 +183,7 @@ class UsageActivity : ComponentActivity() {
     @Composable
     private fun AgentListTab(agent: String, onOpen: (String) -> Unit) {
         var sessions by remember { mutableStateOf<List<SessionData.AgentSession>?>(null) }
+        var query by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
         LaunchedEffect(Unit) {
             sessions = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 when (agent) {
@@ -192,8 +193,35 @@ class UsageActivity : ComponentActivity() {
                 }
             }
         }
-        val list = sessions
+        val list = sessions?.let { all ->
+            val q = query.text.trim()
+            if (q.isEmpty()) all else all.filter {
+                it.title.contains(q, ignoreCase = true) ||
+                    it.id.contains(q, ignoreCase = true) ||
+                    it.model.contains(q, ignoreCase = true) ||
+                    it.directory.contains(q, ignoreCase = true)
+            }
+        }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                // title + id + model + directory are all searchable; sessions pile up fast
+                androidx.compose.material3.OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { M3Text("搜索会话（标题/ID/模型/目录）", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (list != null && list.isEmpty() && sessions?.isNotEmpty() == true) {
+                item {
+                    M3Text(
+                        "没有匹配「${query.text}」的会话",
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        fontSize = 14.sp,
+                    )
+                }
+            }
             when {
                 list == null -> item { M3Text("读取中…", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 14.sp) }
                 list.isEmpty() -> item {
