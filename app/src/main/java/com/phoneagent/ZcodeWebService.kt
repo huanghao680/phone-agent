@@ -12,6 +12,9 @@ object ZcodeWebState {
     @Volatile var ready = false
     @Volatile var lastError: String? = null
     @Volatile var port: Int = 3030
+
+    /** Live process handle, published for the watchdog's dead/hung distinction. */
+    @Volatile var process: Process? = null
 }
 
 /**
@@ -79,6 +82,7 @@ class ZcodeWebService : Service() {
             pb.redirectErrorStream(true)
             val p = pb.start()
             proc = p
+            ZcodeWebState.process = p
             thread(name = "zcode-web-log") {
                 p.inputStream.bufferedReader().forEachLine { appendLog(it) }
             }

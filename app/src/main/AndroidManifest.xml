@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
@@ -50,6 +51,37 @@
             </intent-filter>
         </activity>
 
+        <!-- Handover target: "share with Phone Agent" / "open with Phone Agent".
+             Takes the file into a temp workspace and opens a new session there. -->
+        <activity
+            android:name=".FileIncomingActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-python" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
+
         <!-- Launcher icon 3: official ZCode web UI -->
         <activity
             android:name=".ZcodeWebActivity"
@@ -79,6 +111,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".DiagActivity"
+            android:exported="false"
+            android:label="诊断" />
 
         <activity
             android:name=".UsageActivity"
@@ -138,7 +175,24 @@
         <service
             android:name=".SessionService"
             android:exported="false" />
-            <service
+            <!-- Loopback tool channel: lets agent sessions read the screen, dump the
+             UI tree, tap and run privileged shell commands via Shizuku. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".PhoneToolService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
             android:name=".OpencodeWebService"
             android:exported="false" />
 

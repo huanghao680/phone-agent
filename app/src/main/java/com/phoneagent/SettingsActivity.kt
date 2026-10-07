@@ -247,6 +247,69 @@ class SettingsActivity : ComponentActivity() {
                     }
                 }
 
+                item { GroupTitle("引擎保活与诊断") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            var restore by remember { mutableStateOf(Prefs.restoreOnBoot(this@SettingsActivity)) }
+                            // cheap in-memory state, no I/O: read straight in composition
+                            val watchdogText = buildString {
+                                append("看门狗 ").append(if (Watchdog.running) "运行中" else "未启动").append(" · ")
+                                for (a in listOf("zcode", "dsh", "opencode")) {
+                                    append(a).append("=").append(Watchdog.stateOf(a)).append(" ")
+                                }
+                            }
+                            M3Text(
+                                "看门狗每 5 秒探活本地引擎：端口不通判为已死立即重启；HTTP 不通但端口还在视为半死、连续 30 秒才重启；日志尾部命中崩溃签名只通知不重启（不打断进行中的对话）。",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            if (watchdogText.isNotBlank()) {
+                                M3Text(watchdogText, color = MiuixTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                Spacer(Modifier.height(8.dp))
+                            }
+                            UpdateRow(
+                                if (restore) "开机恢复引擎：开" else "开机恢复引擎：关",
+                                enabled = true,
+                            ) {
+                                restore = !restore
+                                Prefs.setRestoreOnBoot(this@SettingsActivity, restore)
+                            }
+                            M3Text(
+                                "开启后，重启手机会自动拉起上次在跑的引擎（需 Shizuku 或 root 才能拉起 opencode）。",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 11.sp,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            UpdateRow("诊断（日志尾部 / 端口 / 崩溃签名）", enabled = true) {
+                                startActivity(android.content.Intent(this@SettingsActivity, DiagActivity::class.java))
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            UpdateRow("虚拟屏：查看当前 display 列表", enabled = true) {
+                                threadRun {
+                                    val out = VirtualDisplay.list()
+                                    ui { rootLog = out.ifBlank { "(无输出)" } }
+                                }
+                            }
+                            M3Text(
+                                "虚拟屏让第三方 App 跑在独立 display 上（Shizuku 通道创建）。agent 用 curl 调 127.0.0.1:8899/vdisplay-* 端点；坐标一律绝对像素，归一化坐标会被拒绝（分母歧义会误点真屏）。",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 11.sp,
+                            )
+                            if (rootLog.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                M3Text(
+                                    rootLog.take(600),
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = 12.sp,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item { GroupTitle("Shizuku（非 root 的 adb 权限）") }
                 item {
                     Card {

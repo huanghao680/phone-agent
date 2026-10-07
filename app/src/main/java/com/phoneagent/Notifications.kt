@@ -15,6 +15,29 @@ object Notifications {
     const val ID_ZCODE_WEB = 3
     const val ID_OPENCODE = 4
     const val ID_SESSION_DONE = 10
+    const val ID_WATCHDOG = 11
+    const val ID_TOOLS = 12
+
+    /** Transient watchdog/self-heal notice; must not be an ongoing service notification. */
+    fun notice(ctx: Context, text: String) {
+        ensureChannel(ctx)
+        val intent = Intent(ctx, SettingsActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pi = PendingIntent.getActivity(
+            ctx, ID_WATCHDOG, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = Notification.Builder(ctx, CHANNEL)
+            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setContentTitle("Phone Agent")
+            .setContentText(text)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build()
+        (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(ID_WATCHDOG, n)
+    }
 
     fun ensureChannel(ctx: Context) {
         val mgr = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

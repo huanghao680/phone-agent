@@ -11,7 +11,7 @@
 | **Zcode** | 横屏全屏 Web UI | 官方 `packages/web` SPA + Hono 服务端（CI 构建），内嵌 Node 起 127.0.0.1:3030，WebView 呈现 |
 | **DeepSeek Harness** | 横屏全屏 Web UI | 内嵌 Node 起 `dsh web`（127.0.0.1:3080），WebView 呈现 |
 | **opencode** | 横屏全屏 Web UI | `opencode serve`（127.0.0.1:4096），Bun 单文件经 musl loader 启动，WebView 呈现 |
-| **终端** | TUI 选择器 | 五选一：**zcode TUI / dsh TUI / Codex CLI / Claude Code / opencode**（Termux 终端模拟器 + 真实 PTY），页内还有**用量统计**与**设置**入口 |
+| **终端** | TUI 选择器 | 五选一：**zcode TUI / dsh TUI / Codex CLI / Claude Code / opencode**（Termux 终端模拟器 + 真实 PTY），页内还有**用量统计与会话管理**、**设置**入口 |
 
 外加**可选的 root 深度集成**：一键安装 Magisk 模块，把 `zcode` / `dsh` 命令装进 `/system/bin`，之后机内任意终端可执行，且运行时不需要 root。
 
@@ -151,6 +151,32 @@ workspace 外写入   → 拒绝（Permission denied；真实文件系统无残�
 - **Zcode**：本机 SQLite `model_usage` 表（近 14 天按天、按模型汇总输入/输出/推理 tokens）。
 - **DSH**：会话日志 `~/.dsh/sessions/<工作区>/<会话>/session.v3.jsonl.zstd`。它是**多帧 zstd 拼接**文件，用 `zstd-jni` 连续流解码；用量取自 `assistant/message` 事件的 `data.usage`（输入/输出/缓存命中/推理）与 `data.message.source`（模型名）。
 
+### 会话管理
+
+统计页下方的**会话管理**可以直接浏览/检查/删除各 agent 的历史会话：
+
+| Agent | 数据来源 | 可见信息 | 操作 |
+|---|---|---|---|
+| Zcode | `~/.zcode/cli/db/db.sqlite`（WAL 只读快照） | 标题、时长、模型请求/用户/助手消息数、工具调用总数、输入/输出/缓存/推理 tokens、按模型与按工具分解（含**耗时**与**错误数红标**）、近期输入 | 删除/迁移 |
+| DeepSeek Harness | `~/.dsh/sessions` 下的 jsonl[.zstd] 逐帧解析 | 标题、子代理标记、起止时间与时长、轮次、工具调用与错误、LLM 重试、输入/输出/缓存/推理 tokens、按模型与按工具分解 | 删除/迁移 |
+| opencode | `~/.local/share/opencode/opencode.db` 的 `session` 表（token 聚合已内联） | 标题、子代理标记、时间、消息数、输入/输出/推理/缓存 tokens、成本 | 删除（对齐上游 `Session.remove`：递归删除子代理会话 + 清事件流）/迁移 |
+
+列表 → 详情均为页内导航，系统返回键按「详情 → 列表 → 概览 → 退出」逐级回退。所有读取都以**只读快照**方式进行（先拷贝 db+wal 到 cache 再打开），不会影响正在运行的 agent。
+
+### 删除保护与回收站
+
+- **二次确认**：删除确认框里展示会话标题与用量摘要，确认按钮必须**持续按住 1.5 秒**（带进度提示），误触无法触发。
+- **回收站**：删除先整体备份到 `files/trash/<agent>/` 再从原存储移除——zcode/opencode 用 `ATTACH` + `CREATE TABLE AS SELECT` 把该会话的全部关联行（含事件流）拷进独立 SQLite 快照，dsh 直接搬迁会话目录并记录原路径。回收站页可**恢复**（原样放回，INSERT OR REPLACE / 目录搬回）或**彻底删除**（同样需长按确认），也可一键清空。
+- 备份失败时删除会被拒绝（会话原样保留），不会出现"删了但没备份"。
+
+### 跨 Agent 会话迁移
+
+会话详情页的**迁移到其他 Agent** 把当前会话翻译成目标 agent 的**原生会话格式**写入其存储，在对方的会话列表中原样出现：
+
+- 迁移保真度：用户/助手文本逐字保留，token 用量随行；工具调用转为 `[工具调用] 工具名：参数摘要` 文字行（三家数据模型不同，无法做无损工具记录迁移）。
+- zcode 目标写 `session/message/part` 行；opencode 目标写 `session/message/part` 行并把 token 聚合进 `session` 列；dsh 目标生成 `session.v3.jsonl` 事件流（session/session-title/user-message/assistant-message，与真实事件同构）。
+- 原会话保留不动；迁移在事务中执行，失败不留半截数据。
+
 ## 故障排查
 
 - **终端一闪而过 / exec 报错**：仅支持 arm64（`uname -m` 应为 `aarch64`）。
@@ -229,7 +255,7 @@ dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh
 
 ## 同类项目与借鉴
 
-调研过的先行项目（2026-09）：
+调研过的先行项目（2026-09 起，2026-10 增补 dsh-mobile-apk 一节）：
 
 - [slopus/happy](https://github.com/slopus/happy)（23.9k⭐）— Claude Code/Codex 移动客户端，**遥控器流派**：agent 跑在电脑上，手机经自建 relay + E2EE 远程操控。UX 参考：会话跨设备恢复、完成通知、语音。
 - [siteboon/claudecodeui（CloudCLI）](https://github.com/siteboon/claudecodeui)（13.8k⭐）— 本机 Node 服务 + node-pty 网页终端 + 文件管理器的移动适配 Web UI，支持多 CLI；本项目 Zcode Web GUI 的实现蓝图。
@@ -237,7 +263,29 @@ dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh
 - [Magisk-Modules-Alt-Repo/node](https://github.com/Magisk-Modules-Alt-Repo/node) — 与本项目 root 集成同构的先例（`system/usr/share/node` + `/system/bin` 包装脚本）；本项目用动态链接的 Termux Node，wrapper 内自带 `LD_LIBRARY_PATH`。
 - [JaneaSystems/nodejs-mobile](https://github.com/JaneaSystems/nodejs-mobile) — 早期内嵌 Node 方案，已停更（Node 18，不满足 zcode 的 ≥22.19）。
 
-结论：**"把 agent CLI 本体装进 APK 在手机本机运行"目前没有现成完整先例**；本项目的各组成部分均有成熟参考并被独立验证。
+### dsh-mobile-apk / DeepCode（2026-10 对标与借鉴）
+
+[kelai141/dsh-mobile-apk](https://github.com/kelai141/dsh-mobile-apk) — MIT，2026-10 时 634⭐/72 fork，**是这个赛道里唯一有真实用户量的同类独立 APK**（单做 dsh 的安卓壳：WebView UI + 内嵌 Termux 运行时快照解压即跑）。技术路线与我们高度同源（xz 快照解压即跑、manifest 驱动的整树替换更新、固定 debug.keystore 支持 `adb install -r` 覆盖安装），也踩过同批坑（Termux 编译期路径、`OPENSSL_CONF`、pnpm store 锁、run-as 引号地狱、签名一致性），其 1390 行 `docs/AGENTS/gotchas.md` 与我们的坑位记录几乎互为镜像。
+
+**本轮从它借鉴并已在 v0.7.86 落地的功能：**
+
+| 借鉴项 | 上游做法 | 我们的落地与实测 |
+|---|---|---|
+| **保活看门狗（P0）** | `WatchdogV2` 四态探活：`HEALTHY` / `DEGRADED_HTTP`（端口在但 HTTP 不答＝半死，连续 N 拍才重启）/ `DEGRADED_LOG`（HTTP 正常但日志有崩溃签名，**绝不重启**以免打断进行中的对话）/ `DEAD`（立即重启）；5s 一拍 + 指数退避 5→80s 封顶 + 熔断阀 | `Watchdog.kt` 同语义实现，探活三个端口（3030/3080/4096）。**实测**：人工 kill dsh 引擎 → 5 秒内判定 DEAD → 自动拉起服务 → 恢复服务状态，全程无人工干预 |
+| **启动宽限 / 重启冷却** | `START_COOLDOWN_MS` 冷启动预算；慢响应否决破坏性动作但有阶梯上界 | 我们实测出一处**致命竞态**：dsh 冷启动需 25-35 秒，看门狗若在此期间拉停服务会触发 `ForegroundServiceDidNotStartInTimeException` 并连带击杀宿主 Activity。修法＝「**从未见过 healthy ＝ 仍在启动中**」的宽限语义（90s）+ 自身重启冷却 60s + stop/start 间隔 2s |
+| **日志尾部签名扫描** | 扫 `engine.log` 尾部 `plugin-tree failed` / `uncaught` 驱动定向自愈 | `tailSignature()` 按 agent 配签名（opencode：`Bad system call`/`ServeError`/`EADDRINUSE`；dsh：`plugin tree failed`/`ERR_PNPM`），命中只**上报通知**不自动重启，保护进行中的对话 |
+| **工具面：把手机变成 agent 的手脚** | 45 个工具（含 14 个 phone 工具），无障碍 + Shizuku 双通道 | `PhoneToolService` 在 `127.0.0.1:8899` 暴露纯 HTTP 端点（`/ui-dump` `/screenshot` `/tap` `/input` `/key` `/shell` `/clipboard` `/ports` `/device`）——**任何 agent 用 bash/curl 即可调用**，无需插件注册。**实测**：Shizuku 授权后 UI 层级树完整返回、截图得 1200×1920 PNG、`/shell` 确认运行在 uid=2000(shell) 域、`/tap` 成功派发点击 |
+| **文件 handover 直达会话** | 「使用其他应用打开 / 分享」→ 跳转本应用 → 新建临时工作区会话处理文件，7 天 TTL | `FileIncomingActivity` 接 `SEND`/`SEND_MULTIPLE`/`VIEW`，文件拷入 `files/incoming/` 并以此为会话工作区开终端，启动时清扫 7 天前的文件。**实测**：其他 App 打开 txt → 自动进终端且文件就位 |
+| **顺带修出的自家 bug** | 其 gotcha#3：dsh 的 surface-eligible 事件 append 必须带 `surfaceOp` 标记，否则报 `requires a surfaceOp marker` | 我们的跨 agent 迁移构造器 `toDsh` 漏写该字段——历史会话读侧容忍，但用户在 dsh 里**续写**迁移来的会话会失败。已修复，生成文件验证带 `"surfaceOp":"append"` |
+| **开机恢复引擎** | `BOOT_COMPLETED` 恢复上次同意运行的引擎（`userShutdown` 意图持久化） | `EngineState` + `BootReceiver`，设置页开关控制（默认关，不擅自自启）。实测状态记录正确持久化（`running={dsh}`），恢复逻辑与手动启动同一条代码路径 |
+| **诊断聚合页** | `LogCollector` / `LiveProbe` 汇总各引擎健康，替代 adb shell 翻 cache | `DiagActivity` 一页显示：看门狗状态与三引擎探活结果、经 Shizuku 读到的全机监听端口（标注用途）、三个 agent 日志尾部。**实测**：当场抓出 zcode 的 `provider-settings.refresh FAIL HTTP 400` 真实报错 |
+| **附件上传** | 系统文件选择器 + API 33+ 照片选择器分流，单击即出 | `AttachmentBridge` 给三个 WebView 挂 `WebChromeClient.onShowFileChooser`，图片类分流到相册、其余走文档选择器（含多选）。*已接线，尚未端到端点击验证（需登录态内点回形针）* |
+| **虚拟屏跑第三方 App** | Shizuku 特权通道创建 display；跨屏拉起唯一可行路径是 `am start --display`（他们实测 monkey/shell-am/进程内三条均不成立） | `VirtualDisplay` + 工具端点 `/vdisplay-*`。**实测发现本设备（Android 17）的 `cmd display` 无 `create-display` 子命令** → 改为先探测能力再如实报告「本机不支持」，不假装失败。坐标一律绝对像素 + `input -d`，归一化坐标明确拒绝（分母歧义会误点真屏） |
+| **免费情报** | gotchas 全量登记 | 提前规避若干我们尚未踩到的坑：`/data/user/0` 软链需双侧 realpath、pnpm 陈旧 store 状态三件套、Android 13+ 受限设置解锁、dsh `Session.create` origin 白名单、虚拟屏跨屏拉起唯一可行路径（他们实测 monkey/shell-am/进程内三条均不成立） |
+
+**未借鉴**：它的自研响应式 UI（fork 追上游的负担直接把它的引擎锁死在 dsh 0.1.5-rc.1，我们已是 0.2.0-rc.2）、QQ 群运营、多仓库生态拆分。反过来它也没有多 agent、会话管理/回收站/跨 agent 迁移，以及让第三方插件真正跑起来的补丁链。
+
+结论：~~"把 agent CLI 本体装进 APK 在手机本机运行"没有现成完整先例~~ → **2026-10 校正：已有同类实现走通并获得社区规模**（dsh-mobile-apk），但在**多 agent 共存、会话管理、第三方插件可用性**三个维度上本项目仍明显领先；本项目的各组成部分均有成熟参考并被独立验证。
 
 ## 真机验证状态
 
@@ -251,13 +299,24 @@ dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh
 
 沙盒与工具链的完整自测由 dsh / zcode 两个 CLI 在设备上自行跑出报告（`selftest/` 目录），逐项含命令与原始输出。
 
-最近一轮全量自测（v0.7.72，2026-10-04，小米平板 4 + 乐视）：
+最近一轮全量自测（v0.7.82，2026-10-06，小米平板 4 + 乐视）：
 
 - **A/B 槽位**：legacy 直装布局（zcode 3.14.3-28 / dsh 0.1.5-rc.3）自动迁移到双槽并跨大版本升级到 zcode 3.14.4-30 / dsh 0.2.0-rc.2，升级后 zcode CLI、dsh web（含插件页 8 个官方插件）全部正常；
 - **失败自动回滚**：手工构造损坏的备用槽后启动，`beginBoot` 切换 → 验证失败 → 自动回滚并重试成功，槽位回到 verified；
 - **opencode**：Shizuku 路径 webui HTTP 200 + 界面完整渲染（非 root），TUI 完整渲染；
 - **Shizuku 工具**：幻象进程修复 / 全文件访问授权 / 端口表 / 电池白名单 / 通知权限，五条逐一执行并用 adb shell 独立核实状态；
-- **zcode web**：升级后 3030 正常出欢迎页（HTTP 200）。
+- **二进制更新**：codex 0.157.1→0.160.0、claude 2.1.287→2.1.289、opencode 1.18.33→1.18.34 全部走设置页真实升级完成，更新后 TUI 可用；
+- **会话管理**：DSH 27 个真实会话（乐视→小米搬运）列表/详情渲染正确，UI 删除后磁盘会话 27→26；Zcode 3 个真实会话详情含按工具耗时与错误红标（WebFetch ⚠2）；opencode 会话列表 token 聚合正确，删除按上游语义实测（session 10→9、event 150→141、无孤儿行、integrity_check ok）；返回键逐级回退（详情→列表→概览→退出）实测通过。
+- **功能正确性测试（v0.7.90，2026-10-07）**：工具通道结果级验证——截图随真实屏幕变化（tap 打开设置后 md5 改变）、`/ui-dump` 反映当前页面、剪贴板 set/get 往返一致、`/tap` 派发的点击真实生效。测出并修复 `/input` 两个真 bug：①Android `input text` 对非 ASCII 直接抛异常（`Exception occurred while executing 'text'`），原实现不查退出码、中文静默失败还报 `typed:N` → 现按是否 ASCII 分流，非 ASCII 走剪贴板 + `KEYCODE_PASTE`（实测有效；注入的 Ctrl+V 和弦键 rc=0 但 Miuix 输入框不响应，已实测并修正）；②退出码原计划经临时文件回传，但 **Shizuku shell（uid 2000）无权写应用私有 cacheDir** → 改为在命令自身 stdout 尾部附加 `pa-rc=$?` 解析，零文件零权限问题。端到端验证：ASCII 输入（`{"typed":25,"via":"input-text"}` + 字段实值核对）、中文粘贴（`{"pasted":4,"via":"clipboard-paste"}` + 字段出现中文）均在设置页输入框实锤；测试期间误清的代理/镜像设置已当场恢复。
+- **长时间稳定性测试（v0.7.87，2026-10-07，小米平板4 累计 ~40 分钟 + 乐视一轮）**：
+  - 持续 12 分钟带周期负载采样：应用进程 RSS 稳定在 237-244MB（无增长趋势）、node 引擎 140MB 持平、dsh 与工具通道全程 200/401 正常、**零崩溃、看门狗零误触发**；
+  - 压力测试：连续 5 次「启动→强杀」快速重启零 `FATAL EXCEPTION` / 零 `ForegroundServiceDidNotStartInTimeException`；工具端点 11 组畸形输入（缺参、非数字、超界坐标、未知路径）全部返回结构化错误而非崩溃；
+  - 会话管理循环：删除→回收站→恢复 3 轮、跨 agent 迁移 3 轮，会话总数恒定 28、zcode db `integrity_check ok`、零孤儿行；内存增量每轮递减（+18/+6/+4MB）且经 trim 可回缩（node 213→144MB），**非泄漏**；
+  - 乐视（Android 11 / sdk 30）同样验证：工具通道正常、dsh 正常、零崩溃。
+  - 测试中修出两个真 bug：①`/tap` 未校验坐标越界（`x=99999999&y=-5` 会被直接派发）→ 已按屏幕像素加边界校验；②迁移会话沿用源会话的 `time_updated`，导致新会话按原始对话时间排到列表中段、迁移完找不到 → 改为 `time_created` 保留原始时间、`time_updated` 打当前时间戳，迁移后即置顶。
+- **借鉴剩余项（v0.7.87）**：设置页新增「引擎保活与诊断」分组（看门狗状态、开机恢复开关、诊断入口、虚拟屏状态）；`DiagActivity` 实测可一页看到看门狗三引擎状态 + Shizuku 全机端口 + 三个日志尾部（当场抓出 zcode 的真实 HTTP 400 报错）；`EngineState`/`BootReceiver` 状态持久化验证通过（开机恢复开关默认关，不擅自自启；`am broadcast` 到静态接收器受 Android 限制无法在调试中触发，恢复逻辑与手动启动同路径）；虚拟屏端点实测**本设备 Android 17 不支持创建**（`cmd display` 无 `create-display`），代码改为先探测能力再如实报告；附件桥已挂载 WebView（*未端到端点击验证*）。
+- **借鉴 dsh-mobile-apk 的保活/工具面（v0.7.86）**：看门狗四态探活，人工 kill dsh 引擎后 5s 内判定 DEAD 并自动拉起、服务恢复，全程无干预；启动宽限与重启冷却修掉了「冷启动期被拉停 → ForegroundServiceDidNotStartInTimeException 连毙宿主 Activity」的竞态；工具通道 127.0.0.1:8899 全部端点实测通过（UI 层级树、1200×1920 PNG 截图、uid=2000 shell 域命令、坐标点击派发）；其他 App「打开方式/分享」直达会话实测，文件落入临时工作区并开新终端；迁移到 dsh 的事件已带 `surfaceOp:"append"`。
+- **删除保护/回收站/迁移（v0.7.85）**：快速点按确认按钮不会删除、按住 1.5s 才触发（进度条实拍确认）；zcode/dsh/opencode 三家删除→回收站→恢复→彻底删除全部闭环实测（回收站条目标题/agent 徽标/大小正确）；迁移 dsh→zcode→opencode 链式实测（token 315/12 从 dsh 经 zcode 带到 opencode 的 session 列），zcode→dsh 迁移出的 `session.v3.jsonl` 事件流可被正常解析渲染。
 
 ## 许可证
 

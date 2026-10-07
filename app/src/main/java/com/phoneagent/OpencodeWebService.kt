@@ -15,6 +15,16 @@ object OpencodeState {
 
     /** opencode serve is loopback-only without a token; the WebView can load it directly. */
     const val URL: String = "http://127.0.0.1:4096/"
+
+    /**
+     * Live child handle. The Bun process here may be owned by our app, by root, or
+     * by Shizuku's shell process, so the watchdog watches whichever handle was last
+     * published; detached spawns additionally record their pid below.
+     */
+    @Volatile var process: Process? = null
+
+    /** pid of a detached `opencode serve` (root / Shizuku spawn path). */
+    @Volatile var servePid: Int? = null
 }
 
 /**
@@ -196,6 +206,7 @@ class OpencodeWebService : Service() {
             }
             appendLog("[5] serve spawned")
             proc = p
+            OpencodeState.process = p
             // su client errors (denial, daemon unreachable) print to stderr —
             // capture them, otherwise a failed root spawn is fully silent
             thread(name = "opencode-spawn-log") {
@@ -365,6 +376,8 @@ class OpencodeWebService : Service() {
 
         fun start(ctx: Context) {
             ctx.startForegroundService(Intent(ctx, OpencodeWebService::class.java))
+            WatchdogTargets.watchOpencode(ctx)
+            EngineState.markRunning(ctx, "opencode")
         }
     }
 }

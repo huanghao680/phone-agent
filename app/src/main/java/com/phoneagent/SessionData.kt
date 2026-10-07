@@ -348,7 +348,7 @@ object SessionData {
                     "SELECT id, COALESCE(title, id), COALESCE(directory, path, ''), time_created, time_updated," +
                         " COALESCE(tokens_input,0), COALESCE(tokens_output,0), COALESCE(tokens_reasoning,0)," +
                         " COALESCE(tokens_cache_read,0) + COALESCE(tokens_cache_write,0)," +
-                        " COALESCE(model, ''), COALESCE(cost, 0)" +
+                        " COALESCE(model, ''), COALESCE(cost, 0), parent_id" +
                         " FROM session ORDER BY time_updated DESC",
                     null,
                 ).use { c ->
@@ -360,7 +360,7 @@ object SessionData {
                             requests = 0, userMessages = 0, assistantMessages = 0,
                             toolCalls = 0, inputTokens = c.getLong(5), outputTokens = c.getLong(6),
                             reasoningTokens = c.getLong(7), cacheTokens = c.getLong(8),
-                            durationMs = 0, retries = 0, subagent = false,
+                            durationMs = 0, retries = 0, subagent = !c.isNull(11),
                             model = c.getString(9) + (if (c.getDouble(10) > 0) "  $${"%.2f".format(c.getDouble(10))}" else ""),
                         )
                     }
@@ -409,6 +409,65 @@ object SessionData {
         } catch (_: Exception) {
         }
         return SessionDetail(sess, emptyList(), tools, emptyList())
+    }
+
+    /**
+     * Deletes a session mirroring upstream Session.remove(): child (subagent)
+     * sessions recursively, then every child table plus the event log, then the
+     * session row. Child tables have ON DELETE CASCADE upstream (foreign_keys=ON),
+     * but Android's SQLiteDatabase defaults FKs off, so they are cleared explicitly.
+     * Returns rows removed.
+     */
+    fun opencodeDelete(ctx: Context, id: String): Int {
+        val f = opencodeDb(ctx)
+        if (!f.exists()) return 0
+        var rows = 0
+        val dbc = SQLiteDatabase.openDatabase(f.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+        try {
+            dbc.rawQuery("PRAGMA busy_timeout = 5000", null).use { it.moveToFirst() }
+            dbc.beginTransaction()
+            try {
+                // collect the session plus every descendant (parent_id chain)
+                val queue = ArrayDeque<String>()
+                queue.add(id)
+                val seen = LinkedHashSet<String>()
+                while (queue.isNotEmpty()) {
+                    val sid = queue.removeFirst()
+                    if (!seen.add(sid)) continue
+                    dbc.rawQuery("SELECT id FROM session WHERE parent_id = ?", arrayOf(sid)).use { c ->
+                        while (c.moveToNext()) queue.add(c.getString(0))
+                    }
+                }
+                for (sid in seen) {
+                    for (t in arrayOf("part", "message", "todo", "session_input", "session_message", "session_share", "session_context_epoch")) {
+                        try {
+                            rows += dbc.delete(t, "session_id = ?", arrayOf(sid))
+                        } catch (_: Exception) {
+                            // older schema may lack a table
+                        }
+                    }
+                    // event log: events hang off event_sequence by aggregate cascade
+                    try {
+                        rows += dbc.delete("event", "aggregate_id = ?", arrayOf(sid))
+                    } catch (_: Exception) {
+                    }
+                    try {
+                        rows += dbc.delete("event_sequence", "aggregate_id = ?", arrayOf(sid))
+                    } catch (_: Exception) {
+                    }
+                    try {
+                        rows += dbc.delete("session", "id = ?", arrayOf(sid))
+                    } catch (_: Exception) {
+                    }
+                }
+                dbc.setTransactionSuccessful()
+            } finally {
+                dbc.endTransaction()
+            }
+        } finally {
+            dbc.close()
+        }
+        return rows
     }
 
     // ───────────────────────── shared ─────────────────────────

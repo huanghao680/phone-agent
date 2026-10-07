@@ -29,6 +29,7 @@ class ZcodeWebActivity : ComponentActivity() {
         findViewById<Button>(R.id.retry).setOnClickListener { connect() }
 
         webView.applyWebUiSettings()
+        AttachmentBridge.attach(this, webView)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
@@ -54,6 +55,8 @@ class ZcodeWebActivity : ComponentActivity() {
         webView.visibility = View.GONE
 
         startForegroundService(Intent(this, ZcodeWebService::class.java))
+        EngineState.markRunning(this, "zcode")
+        WatchdogTargets.watchZcode(this)
 
         thread(name = "zcode-web-connect") {
             val deadline = System.currentTimeMillis() + 160_000
@@ -87,5 +90,11 @@ class ZcodeWebActivity : ComponentActivity() {
     override fun onDestroy() {
         webView.destroy()
         super.onDestroy()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (AttachmentBridge.onResult(requestCode, resultCode, data)) return
+        super.onActivityResult(requestCode, resultCode, data)
     }
 }

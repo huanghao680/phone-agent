@@ -17,6 +17,9 @@ object DshState {
      * and rejects unauthenticated requests, so the WebView must load this URL.
      */
     @Volatile var startUrl: String? = null
+
+    /** Live process handle, published for the watchdog's dead/hung distinction. */
+    @Volatile var process: Process? = null
 }
 
 /**
@@ -107,6 +110,7 @@ class DshService : Service() {
             pb.redirectErrorStream(true)
             val p = pb.start()
             proc = p
+            DshState.process = p
             thread(name = "dsh-log") {
                 p.inputStream.bufferedReader().forEachLine { line ->
                     appendLog(line)

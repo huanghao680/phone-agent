@@ -31,6 +31,7 @@ class DshActivity : ComponentActivity() {
         findViewById<Button>(R.id.retry).setOnClickListener { connect() }
 
         webView.applyWebUiSettings()
+        AttachmentBridge.attach(this, webView)
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, req: WebResourceRequest?, err: WebResourceError?) {
                 if (req?.isForMainFrame == true) {
@@ -62,6 +63,8 @@ class DshActivity : ComponentActivity() {
         webView.visibility = View.GONE
 
         startForegroundService(Intent(this, DshService::class.java))
+        EngineState.markRunning(this, "dsh")
+        WatchdogTargets.watchDsh(this)
 
         thread(name = "dsh-connect") {
             val deadline = System.currentTimeMillis() + 160_000
@@ -98,5 +101,11 @@ class DshActivity : ComponentActivity() {
     override fun onDestroy() {
         webView.destroy()
         super.onDestroy()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (AttachmentBridge.onResult(requestCode, resultCode, data)) return
+        super.onActivityResult(requestCode, resultCode, data)
     }
 }

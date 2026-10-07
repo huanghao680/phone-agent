@@ -2,10 +2,16 @@ package com.phoneagent
 
 import android.database.sqlite.SQLiteDatabase
 import android.os.Bundle
+import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text as M3Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,10 +38,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.withTimeoutOrNull
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -50,6 +59,7 @@ class UsageActivity : ComponentActivity() {
         data object Overview : Screen
         data class AgentList(val agent: String) : Screen
         data class Detail(val agent: String, val id: String) : Screen
+        data object Trash : Screen
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,16 +72,27 @@ class UsageActivity : ComponentActivity() {
     @Composable
     private fun Root() {
         var screen by remember { mutableStateOf<Screen>(Screen.Overview) }
+        // in-page back navigation: detail/trash -> overview; overview lets the system finish
+        BackHandler(enabled = screen != Screen.Overview) {
+            screen = when (val s = screen) {
+                is Screen.Detail -> Screen.AgentList(s.agent)
+                else -> Screen.Overview
+            }
+        }
         Column(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
             TopAppBar(
                 title = when (val s = screen) {
                     Screen.Overview -> "用量统计"
                     is Screen.AgentList -> agentLabel(s.agent) + " 会话"
                     is Screen.Detail -> "会话详情"
+                    Screen.Trash -> "回收站"
                 },
             )
             when (val s = screen) {
-                Screen.Overview -> OverviewTab(onOpenAgent = { screen = Screen.AgentList(it) })
+                Screen.Overview -> OverviewTab(
+                    onOpenAgent = { screen = Screen.AgentList(it) },
+                    onOpenTrash = { screen = Screen.Trash },
+                )
                 is Screen.AgentList -> AgentListTab(
                     agent = s.agent,
                     onOpen = { screen = Screen.Detail(s.agent, it) },
@@ -81,6 +102,7 @@ class UsageActivity : ComponentActivity() {
                     id = s.id,
                     onDeleted = { screen = Screen.AgentList(s.agent) },
                 )
+                Screen.Trash -> TrashTab()
             }
         }
     }
@@ -88,10 +110,12 @@ class UsageActivity : ComponentActivity() {
     // ───────────────────────── overview ─────────────────────────
 
     @Composable
-    private fun OverviewTab(onOpenAgent: (String) -> Unit) {
+    private fun OverviewTab(onOpenAgent: (String) -> Unit, onOpenTrash: () -> Unit) {
         var text by remember { mutableStateOf("读取中…") }
+        var trashCount by remember { mutableStateOf(0) }
         LaunchedEffect(Unit) {
             text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { query() }
+            trashCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { SessionTrash.itemCount(this@UsageActivity) }
         }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
@@ -130,6 +154,24 @@ class UsageActivity : ComponentActivity() {
                                 fontSize = 12.sp,
                             )
                         }
+                    }
+                }
+            }
+            item {
+                Card(Modifier.fillMaxSize().clickable { onOpenTrash() }) {
+                    Column(Modifier.padding(16.dp)) {
+                        M3Text(
+                            "回收站" + (if (trashCount > 0) "（$trashCount）" else ""),
+                            color = MiuixTheme.colorScheme.onSurface,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        M3Text(
+                            "删除的会话在这里暂存，可恢复或彻底清除",
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 12.sp,
+                        )
                     }
                 }
             }
@@ -211,6 +253,7 @@ class UsageActivity : ComponentActivity() {
     private fun DetailTab(agent: String, id: String, onDeleted: () -> Unit) {
         var detail by remember { mutableStateOf<SessionData.SessionDetail?>(null) }
         var confirmDelete by remember { mutableStateOf(false) }
+        var showMigrate by remember { mutableStateOf(false) }
         LaunchedEffect(id) {
             detail = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 when (agent) {
@@ -321,53 +364,315 @@ class UsageActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (agent != "opencode") {
-                    item {
-                        Card(Modifier.fillMaxSize().clickable { confirmDelete = true }) {
+                item {
+                    Card(Modifier.fillMaxSize().clickable { showMigrate = true }) {
+                        Column(Modifier.padding(16.dp)) {
+                            M3Text(
+                                "迁移到其他 Agent",
+                                color = MiuixTheme.colorScheme.onSurface,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            M3Text(
+                                "对话内容以目标 agent 的原生格式写入其会话存储；工具调用转为文字摘要",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
+                }
+                item {
+                    Card(Modifier.fillMaxSize().clickable { confirmDelete = true }) {
+                        Column(Modifier.padding(16.dp)) {
                             M3Text(
                                 "删除该会话",
                                 color = Color(0xFFF87171),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(16.dp),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            M3Text(
+                                "先移入回收站，可在回收站恢复或彻底清除",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 11.sp,
                             )
                         }
                     }
-                } else {
-                    item {
-                        M3Text(
-                            "opencode 会话为事件溯源存储，暂不支持在 App 内删除。",
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            fontSize = 12.sp,
-                        )
-                    }
                 }
             }
+        }
+        if (showMigrate) {
+            val others = listOf("zcode", "dsh", "opencode").filter { it != agent }
+            AlertDialog(
+                onDismissRequest = { showMigrate = false },
+                title = { M3Text("迁移会话") },
+                text = {
+                    M3Text(
+                        "把该会话的对话记录（用户/助手文本、工具调用摘要、token 用量）迁移为另一个 agent 的原生会话。" +
+                            "原会话保留不动。",
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showMigrate = false
+                        doMigrate(agent, id, others[0])
+                    }) { M3Text("迁移到 " + agentLabel(others[0])) }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showMigrate = false
+                        doMigrate(agent, id, others[1])
+                    }) { M3Text("迁移到 " + agentLabel(others[1])) }
+                },
+            )
         }
         if (confirmDelete) {
             AlertDialog(
                 onDismissRequest = { confirmDelete = false },
                 title = { M3Text("删除会话？") },
                 text = {
-                    M3Text(
-                        "将删除该会话的全部消息、用量与工具记录，且不可恢复。" +
-                            (if (agent == "zcode") "建议先关闭正在运行的 zcode 会话。" else ""),
-                    )
+                    Column {
+                        M3Text(
+                            "「" + (d?.session?.title?.ifEmpty { id.take(18) } ?: id.take(18)) + "」将移入回收站。" +
+                                (if (agent == "opencode") "子代理会话一并移入。" else ""),
+                        )
+                        d?.let {
+                            Spacer(Modifier.height(6.dp))
+                            M3Text(
+                                "模型请求 ${it.session.requests} 次 · 工具调用 ${it.session.toolCalls} 次" +
+                                    " · ↑${fmt(it.session.inputTokens)} ↓${fmt(it.session.outputTokens)}",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        M3Text("二次确认：长按下方按钮 1.5 秒。", fontSize = 12.sp, color = Color(0xFFF87171))
+                    }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    HoldToDelete(label = "按住彻底删除") {
                         confirmDelete = false
                         Thread {
-                            when (agent) {
-                                "zcode" -> SessionData.zcodeDelete(this@UsageActivity, id)
-                                "dsh" -> SessionData.dshDelete(this@UsageActivity, id)
+                            val ok = try {
+                                SessionTrash.moveToTrash(this@UsageActivity, agent, id)
+                            } catch (e: Exception) {
+                                false
                             }
-                            runOnUiThread { onDeleted() }
+                            runOnUiThread {
+                                if (ok) onDeleted()
+                                else Toast.makeText(this@UsageActivity, "备份失败，会话未删除", Toast.LENGTH_LONG).show()
+                            }
                         }.start()
-                    }) { M3Text("删除", color = Color(0xFFF87171)) }
+                    }
                 },
                 dismissButton = { TextButton(onClick = { confirmDelete = false }) { M3Text("取消") } },
             )
+        }
+    }
+
+    private fun doMigrate(from: String, id: String, to: String) {
+        val ctx = this
+        Thread {
+            val result = SessionMigrate.migrate(ctx, from, id, to)
+            runOnUiThread {
+                val label = agentLabel(to)
+                result.fold(
+                    onSuccess = { newId ->
+                        Toast.makeText(ctx, "已迁移到 $label（新会话 $newId）", Toast.LENGTH_LONG).show()
+                    },
+                    onFailure = { e ->
+                        Toast.makeText(ctx, "迁移失败：${e.message}", Toast.LENGTH_LONG).show()
+                    },
+                )
+            }
+        }.start()
+    }
+
+    // ───────────────────────── trash tab ─────────────────────────
+
+    @Composable
+    private fun TrashTab() {
+        var items by remember { mutableStateOf<List<SessionTrash.Item>?>(null) }
+        var busy by remember { mutableStateOf(false) }
+        var confirmPurge by remember { mutableStateOf<SessionTrash.Item?>(null) }
+        var confirmEmpty by remember { mutableStateOf(false) }
+
+        fun reload() {
+            busy = true
+            Thread {
+                val fresh = SessionTrash.list(this@UsageActivity)
+                runOnUiThread {
+                    items = fresh
+                    busy = false
+                }
+            }.start()
+        }
+        LaunchedEffect(Unit) { reload() }
+
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val list = items
+            if (list == null) {
+                item { M3Text("读取中…", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 14.sp) }
+            } else if (list.isEmpty()) {
+                item { M3Text("回收站是空的", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 14.sp) }
+            } else {
+                for (it0 in list) {
+                    item {
+                        Card(Modifier.fillMaxSize().clickable { confirmPurge = it0 }) {
+                            Column(Modifier.padding(16.dp)) {
+                                Row {
+                                    M3Text(
+                                        agentLabel(it0.agent),
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        fontSize = 11.sp,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    M3Text(
+                                        fmtDate(it0.deletedAt),
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        fontSize = 11.sp,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    M3Text(
+                                        fmtBytes(it0.bytes),
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                M3Text(
+                                    it0.title.ifEmpty { it0.id.take(24) },
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Row {
+                                    TextButton(onClick = {
+                                        busy = true
+                                        Thread {
+                                            val err = SessionTrash.restore(this@UsageActivity, it0)
+                                            runOnUiThread {
+                                                busy = false
+                                                if (err != null) Toast.makeText(this@UsageActivity, "恢复失败：$err", Toast.LENGTH_LONG).show()
+                                                else Toast.makeText(this@UsageActivity, "已恢复到 ${agentLabel(it0.agent)}", Toast.LENGTH_SHORT).show()
+                                                reload()
+                                            }
+                                        }.start()
+                                    }) { M3Text("恢复") }
+                                    Spacer(Modifier.width(12.dp))
+                                    TextButton(onClick = { confirmPurge = it0 }) {
+                                        M3Text("彻底删除", color = Color(0xFFF87171))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                item {
+                    Card(Modifier.fillMaxSize().clickable { confirmEmpty = true }) {
+                        M3Text(
+                            "清空回收站（${list.size} 项）",
+                            color = Color(0xFFF87171),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+            }
+        }
+        confirmPurge?.let { target ->
+            AlertDialog(
+                onDismissRequest = { confirmPurge = null },
+                title = { M3Text("彻底删除？") },
+                text = { M3Text("「${target.title.ifEmpty { target.id.take(24) }}」将从回收站永久删除，无法恢复。") },
+                confirmButton = {
+                    HoldToDelete(label = "按住永久删除") {
+                        confirmPurge = null
+                        busy = true
+                        Thread {
+                            SessionTrash.purge(this@UsageActivity, target)
+                            runOnUiThread { busy = false; reload() }
+                        }.start()
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirmPurge = null }) { M3Text("取消") } },
+            )
+        }
+        if (confirmEmpty) {
+            AlertDialog(
+                onDismissRequest = { confirmEmpty = false },
+                title = { M3Text("清空回收站？") },
+                text = { M3Text("所有暂存的会话备份将被永久删除，无法恢复。") },
+                confirmButton = {
+                    HoldToDelete(label = "按住清空全部") {
+                        confirmEmpty = false
+                        busy = true
+                        Thread {
+                            SessionTrash.emptyAll(this@UsageActivity)
+                            runOnUiThread { busy = false; reload() }
+                        }.start()
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirmEmpty = false }) { M3Text("取消") } },
+            )
+        }
+    }
+
+    /**
+     * Hold-to-confirm button — the delete itself is destructive, so a plain tap
+     * must never trigger it. Requires ~1.5s of continuous press; shows progress.
+     * Built on raw pointer events (a TextButton's internal clickable interferes
+     * with detectTapGestures' press tracking).
+     */
+    @Composable
+    private fun HoldToDelete(label: String, holdMs: Long = 1500, onConfirm: () -> Unit) {
+        var progress by remember { mutableStateOf(0f) }
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .background(Color(0x1AF87171), androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .pointerInput(holdMs) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        down.consume()
+                        val start = SystemClock.uptimeMillis()
+                        var confirmed = false
+                        while (true) {
+                            val elapsed = SystemClock.uptimeMillis() - start
+                            progress = (elapsed.toFloat() / holdMs).coerceIn(0f, 1f)
+                            if (elapsed >= holdMs) {
+                                confirmed = true
+                                break
+                            }
+                            val ev = withTimeoutOrNull(40) { awaitPointerEvent() }
+                            if (ev == null) continue
+                            if (ev.changes.any { !it.pressed }) break // released early
+                        }
+                        if (confirmed) onConfirm()
+                        progress = 0f
+                    }
+                }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Column {
+                M3Text(
+                    if (progress > 0f) "继续按住… " + "%.1f".format((1f - progress) * holdMs / 1000) + "s" else label,
+                    color = Color(0xFFF87171),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                )
+                if (progress > 0f) {
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.width(96.dp),
+                        color = Color(0xFFF87171),
+                        trackColor = Color(0x33F87171),
+                    )
+                }
+            }
         }
     }
 
@@ -464,6 +769,12 @@ class UsageActivity : ComponentActivity() {
         ms < 60_000 -> "${ms / 1000}s"
         ms < 3_600_000 -> "${ms / 60_000}m${(ms % 60_000) / 1000}s"
         else -> "${ms / 3_600_000}h${(ms % 3_600_000) / 60_000}m"
+    }
+
+    private fun fmtBytes(n: Long): String = when {
+        n >= 1_048_576 -> "%.1fMB".format(n / 1_048_576.0)
+        n >= 1_024 -> "%.1fKB".format(n / 1_024.0)
+        else -> "${n}B"
     }
 
     private fun fmt(n: Long): String = when {

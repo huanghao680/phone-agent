@@ -1,4 +1,5 @@
 package com.phoneagent
+import java.io.File
 
 import android.content.Intent
 import android.os.Bundle
@@ -90,7 +91,9 @@ class ZcodeTerminalActivity : ComponentActivity() {
         val env = NodeRuntime.environment(this)
             .map { (k, v) -> "$k=$v" }
             .toTypedArray()
-        val workDir = StorageAccess.defaultWorkspace(this)
+        // a handover from another app starts in the temp workspace holding the file
+        val workDir = SessionHolder.incomingFiles?.firstOrNull()?.let { File(it).parent }
+            ?: StorageAccess.defaultWorkspace(this)
         val session = TerminalSession(
             "/system/bin/sh",
             workDir,
@@ -230,6 +233,9 @@ object SessionHolder {
 
     /** Agent the current session was started with, so a mismatched pick restarts it. */
     @Volatile var currentAgent: String = "zcode"
+
+    /** File paths handed over from another app, consumed by the next session start. */
+    @Volatile var incomingFiles: List<String>? = null
 
     /** Live sessions for the standalone binary TUIs, keyed by agent name. */
     @Volatile var binarySessions: MutableMap<String, TerminalSession> =

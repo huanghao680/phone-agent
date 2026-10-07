@@ -31,6 +31,13 @@ object Prefs {
      * One-time migration: the DeepSeek key used to live in this plain file;
      * move it to the encrypted store on first read after the upgrade.
      */
+    /** Restore the previously running web engines after a reboot. */
+    fun restoreOnBoot(ctx: Context): Boolean = sp(ctx).getBoolean("restore_on_boot", false)
+
+    fun setRestoreOnBoot(ctx: Context, v: Boolean) {
+        sp(ctx).edit().putBoolean("restore_on_boot", v).apply()
+    }
+
     fun migrateLegacyKey(ctx: Context) {
         val legacy = sp(ctx).getString("deepseek_key", null)
         if (!legacy.isNullOrEmpty()) {

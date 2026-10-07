@@ -1,6 +1,7 @@
 package com.phoneagent
 
 import android.app.Application
+import android.content.Intent
 import android.webkit.WebView
 import com.topjohnwu.superuser.Shell
 
@@ -16,5 +17,17 @@ class AgentApp : Application() {
         if (BuildConfig.DEBUG) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
+        Thread({
+            // drop handover files older than a week (cheap: few files, no I/O storm)
+            try {
+                FileIncomingActivity.sweepExpired(this)
+            } catch (_: Exception) {
+            }
+            // loopback tool channel for agent sessions
+            try {
+                startForegroundService(Intent(this, PhoneToolService::class.java))
+            } catch (_: Exception) {
+            }
+        }, "app-boot").start()
     }
 }
