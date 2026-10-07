@@ -45,7 +45,7 @@ object ApkUpdate {
     }
 
     /** Numeric-aware compare so v0.7.9 > v0.7.10 stays false. */
-    private fun isNewer(tag: String, current: String): Boolean {
+    internal fun isNewer(tag: String, current: String): Boolean {
         val a = tag.split('.').map { it.toIntOrNull() ?: 0 }
         val b = current.split('.').map { it.toIntOrNull() ?: 0 }
         for (i in 0 until maxOf(a.size, b.size)) {

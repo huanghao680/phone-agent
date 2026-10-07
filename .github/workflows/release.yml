@@ -1,0 +1,68 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node (for npm pack)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Accept SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+
+      - name: Install NDK (for node-pty cross-compile)
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264"
+          ls -d "$ANDROID_HOME"/ndk/*/ || true
+
+      - name: Stage embedded runtime (Node.js from Termux repo)
+        run: bash scripts/fetch-runtime.sh
+
+      - name: Cross-compile node-pty for android-arm64
+        run: bash scripts/fetch-native.sh
+
+      - name: Compile landlock-wrap (sandbox tier 1, probe-gated at runtime)
+        run: |
+          CC="$ANDROID_HOME/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang"
+          mkdir -p app/src/main/assets/native
+          "$CC" -O2 -Wall -Werror scripts/landlock-wrap.c -o app/src/main/assets/native/landlock-wrap
+
+      - name: Stage CLI packages (zcode / dsh)
+        run: bash scripts/fetch-packages.sh
+
+      - name: Stage codex + claude binaries (terminal picker)
+        run: bash scripts/fetch-terminal-extra.sh
+
+      - name: Build official ZCode web UI + server
+        run: bash scripts/fetch-zcode-web.sh
+
+      - name: Build debug APK (debug-signed, installable)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - run: gradle :app:assembleDebug --no-daemon -Pandroid.suppressUnsupportedCompileSdk=35
+
+      - name: Rename APK with tag
+        run: cp app/build/outputs/apk/debug/app-debug.apk "phone-agent-${GITHUB_REF_NAME}-arm64.apk"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: phone-agent-*-arm64.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

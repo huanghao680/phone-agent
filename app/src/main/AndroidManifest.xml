@@ -187,6 +187,12 @@
             </intent-filter>
         </receiver>
 
+        <activity
+            android:name=".BrowserWorkbenchActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:label="AI 浏览器" />
+
         <service
             android:name=".A11yService"
             android:exported="false"

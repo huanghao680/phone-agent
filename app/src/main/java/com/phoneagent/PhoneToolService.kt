@@ -215,6 +215,22 @@ class PhoneToolService : Service() {
                             json(mapOf("error" to "坐标越界 ($x,$y)，须在 0..${maxX()}x${maxY()} 内"))
                         } else json(mapOf("message" to VirtualDisplay.tap(x, y, id)))
                     }
+                    "/browser-open" -> {
+                        val url = q["url"]
+                        if (url.isNullOrBlank()) argErrJson("url")
+                        else {
+                            BrowserWorkbenchActivity.open(applicationContext, url)
+                            json(mapOf("opened" to url))
+                        }
+                    }
+                    "/browser-snapshot" -> {
+                        val snap = BrowserWorkbenchActivity.snapshot()
+                        json(snap)
+                    }
+                    "/browser-close" -> {
+                        BrowserWorkbenchActivity.close()
+                        json(mapOf("closed" to true))
+                    }
                     "/a11y-dump" -> {
                         val svc = A11yService.instance
                         if (svc == null) {
@@ -248,7 +264,7 @@ class PhoneToolService : Service() {
         mapOf(
             "service" to "phone-agent-tools",
             "endpoints" to listOf(
-                "/status", "/ports", "/ui-dump", "/a11y-dump", "/screenshot", "/tap", "/input",
+                "/status", "/ports", "/ui-dump", "/a11y-dump", "/browser-open", "/browser-snapshot", "/browser-close", "/screenshot", "/tap", "/input",
                 "/key", "/shell", "/clipboard", "/device",
                 "/vdisplay-create", "/vdisplay-destroy", "/vdisplay-launch", "/vdisplay-tap", "/vdisplay-list",
             ),
@@ -375,6 +391,12 @@ class PhoneToolService : Service() {
         is Number, is Boolean -> v.toString()
         is List<*> -> v.joinToString(",", "[", "]") { serialize(it) }
         is Array<*> -> v.joinToString(",", "[", "]") { serialize(it) }
+        // Android's bundled org.json is ancient: JSONArray is NOT Iterable,
+        // so iterate by index instead of joinToString
+        is org.json.JSONArray -> (0 until v.length()).joinToString(",", "[", "]") { serialize(v.opt(it)) }
+        is org.json.JSONObject -> v.keys().asSequence().joinToString(",", "{", "}") {
+            "\"" + escape(it) + "\":" + serialize(v.opt(it))
+        }
         is Map<*, *> -> v.entries.joinToString(",", "{", "}") {
             "\"" + escape(it.key.toString()) + "\":" + serialize(it.value)
         }
