@@ -193,6 +193,58 @@ object NodeRuntime {
     }
 
     /**
+     * Installs the pa-* device tool wrappers into usr/bin so agent sessions can
+     * call the loopback tool channel (PhoneToolService) without knowing its URL.
+     * New files are never in the runtime manifest, so pruneStaleRuntimeFiles
+     * leaves them alone.
+     */
+    fun ensureToolWrappers(ctx: Context) {
+        if (!isRuntimeExtracted(ctx)) return
+        val bin = File(usrDir(ctx), "bin")
+        bin.mkdirs()
+        val tools = mapOf(
+            "pa-screenshot" to """#!/system/bin/sh
+exec curl -s --max-time 30 "http://127.0.0.1:8899/screenshot"
+""",
+            "pa-ui-dump" to """#!/system/bin/sh
+exec curl -s --max-time 30 "http://127.0.0.1:8899/ui-dump"
+""",
+            "pa-tap" to """#!/system/bin/sh
+exec curl -s --max-time 15 "http://127.0.0.1:8899/tap?x=$1&y=$2"
+""",
+            "pa-input" to """#!/system/bin/sh
+exec curl -s --max-time 30 -G --data-urlencode "text=$*" "http://127.0.0.1:8899/input"
+""",
+            "pa-key" to """#!/system/bin/sh
+exec curl -s --max-time 15 -G --data-urlencode "code=$*" "http://127.0.0.1:8899/key"
+""",
+            "pa-shell" to """#!/system/bin/sh
+exec curl -s --max-time 60 -G --data-urlencode "cmd=$*" "http://127.0.0.1:8899/shell"
+""",
+            "pa-clip" to """#!/system/bin/sh
+if [ $# -eq 0 ]; then
+  exec curl -s --max-time 15 "http://127.0.0.1:8899/clipboard"
+fi
+exec curl -s --max-time 15 -G --data-urlencode "text=$*" "http://127.0.0.1:8899/clipboard"
+""",
+            "pa-ports" to """#!/system/bin/sh
+exec curl -s --max-time 15 "http://127.0.0.1:8899/ports"
+""",
+            "pa-device" to """#!/system/bin/sh
+exec curl -s --max-time 15 "http://127.0.0.1:8899/device"
+""",
+        )
+        for ((name, body) in tools) {
+            try {
+                val f = File(bin, name)
+                if (!f.isFile || f.readText() != body) f.writeText(body)
+                f.setExecutable(true, false)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /**
      * Installs the dsh bash-sandbox shim (usr/bin/bwrap, backed by proot from
      * the runtime + the CI-built landlock-wrap when present) and records the
      * permission mode dsh profiles should default to. workspace-write requires
@@ -310,7 +362,15 @@ object NodeRuntime {
             File(homeDir(ctx), ".dsh/AGENTS.md"),
             File(homeDir(ctx), "AGENTS.md"),
         )) {
-            if (!target.exists()) {
+            // rewrite when the shipped version changed — this file is ours (the
+            // update-policy section is a hard rule), an agent editing it does not
+            // stick across restarts by design
+            val stale = try {
+                !target.exists() || target.readText() != body
+            } catch (_: IOException) {
+                true
+            }
+            if (stale) {
                 target.parentFile?.mkdirs()
                 try {
                     target.writeText(body)

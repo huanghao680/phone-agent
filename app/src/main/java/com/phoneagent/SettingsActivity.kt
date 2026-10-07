@@ -282,6 +282,26 @@ class SettingsActivity : ComponentActivity() {
                                 fontSize = 11.sp,
                             )
                             Spacer(Modifier.height(10.dp))
+                            var apkUpd by remember { mutableStateOf("检查 APK 更新（手动，不打扰）") }
+                            UpdateRow(apkUpd, enabled = apkUpd.startsWith("检查")) {
+                                threadRun {
+                                    val r = try {
+                                        val info = ApkUpdate.check(this@SettingsActivity)
+                                        if (info.newer) "发现新版 v${info.latestTag}，点此打开下载页" else "已是最新（v" + (packageManager.getPackageInfo(packageName, 0).versionName ?: "") + "）"
+                                    } catch (e: Exception) {
+                                        "检查失败：${e.message?.take(80) ?: "网络"}（点此重试）"
+                                    }
+                                    ui {
+                                        apkUpd = r
+                                        if (r.startsWith("发现新版")) {
+                                            try {
+                                                ApkUpdate.openReleasesPage(this@SettingsActivity)
+                                            } catch (_: Exception) {
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             UpdateRow("诊断（日志尾部 / 端口 / 崩溃签名）", enabled = true) {
                                 startActivity(android.content.Intent(this@SettingsActivity, DiagActivity::class.java))
                             }

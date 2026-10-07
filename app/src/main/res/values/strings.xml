@@ -17,4 +17,5 @@
     <string name="dsh_loading">正在启动 DeepSeek Harness 服务…</string>
     <string name="dsh_error">服务未就绪，请重试</string>
     <string name="retry">重试</string>
+    <string name="a11y_desc">phone-agent 设备工具：允许 agent 会话读取屏幕语义树（仅回环通道使用）</string>
 </resources>

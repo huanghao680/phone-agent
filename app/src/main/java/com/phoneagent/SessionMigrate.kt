@@ -309,6 +309,25 @@ object SessionMigrate {
                             JSONObject().put("type", "text").put("text", m.text)
                                 .put("time", JSONObject().put("start", m.time).put("end", m.time)).toString(), 0),
                     )
+                    // one model_usage row per assistant message so the usage page
+                    // and session chips show the migrated conversation's real cost
+                    if (m.role == "assistant") {
+                        dbc.execSQL(
+                            "INSERT INTO model_usage (id, logical_request_id, attempt_index, session_id," +
+                                " query_source, provider_id, model_id, status, started_at, completed_at," +
+                                " duration_ms, tool_call_count, input_tokens, output_tokens, reasoning_tokens," +
+                                " cache_creation_input_tokens, cache_read_input_tokens, computed_total_tokens," +
+                                " retry_count, retryable, cancelled_by_user, context_exceeded)" +
+                                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            arrayOf(
+                                "mu_" + rand(8) + "_" + UUID.randomUUID(), "lr_" + UUID.randomUUID(), 0, newId,
+                                "migrated", m.provider.ifEmpty { "migrated" }, m.model.ifEmpty { "unknown" },
+                                "completed", m.time, m.time, 0, 0, m.input, m.output, m.reasoning,
+                                0, m.cache, m.input + m.output + m.reasoning + m.cache,
+                                0, 0, 0, 0,
+                            ),
+                        )
+                    }
                     seq++
                 }
                 dbc.setTransactionSuccessful()

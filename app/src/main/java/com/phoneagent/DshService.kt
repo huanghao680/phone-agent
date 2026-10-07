@@ -62,6 +62,7 @@ class DshService : Service() {
             // danger-full-access, but headless/CLI profiles spawned from
             // sessions inherit this runtime and need the sandbox staged
             NodeRuntime.ensureSandboxTools(this)
+            NodeRuntime.ensureToolWrappers(this)
             // must-read environment/update policy for agent sessions
             NodeRuntime.seedAgentInstructions(this)
             // storage access facts, measured from this process (the app's own
@@ -83,6 +84,7 @@ class DshService : Service() {
             // the package tree may have just been replaced: re-stage the shim
             // and rewrite the sandbox-mode file for the new version
             NodeRuntime.ensureSandboxTools(this)
+            NodeRuntime.ensureToolWrappers(this)
             // A/B: a pending update becomes active for THIS boot; if the boot
             // fails below, revertFailedBoot swaps back and we retry once
             val verifying = AgentSlots.beginBoot(this, AgentSlots.DSH) { line -> appendLog(line) } > 0

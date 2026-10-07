@@ -34,6 +34,7 @@ class ZcodeWebService : Service() {
         startForeground(Notifications.ID_ZCODE_WEB, Notifications.build(this, "正在启动 Zcode Web…"))
         ZcodeWebState.ready = false
         ZcodeWebState.lastError = null
+        NodeRuntime.ensureToolWrappers(this)
         thread(name = "zcode-web-boot") { boot() }
         return START_STICKY
     }

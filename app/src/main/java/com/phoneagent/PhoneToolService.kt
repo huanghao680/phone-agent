@@ -215,6 +215,14 @@ class PhoneToolService : Service() {
                             json(mapOf("error" to "坐标越界 ($x,$y)，须在 0..${maxX()}x${maxY()} 内"))
                         } else json(mapOf("message" to VirtualDisplay.tap(x, y, id)))
                     }
+                    "/a11y-dump" -> {
+                        val svc = A11yService.instance
+                        if (svc == null) {
+                            json(mapOf("error" to "accessibility service not enabled (系统设置-无障碍 开启 phone-agent 设备工具)"))
+                        } else {
+                            json(svc.dumpTree())
+                        }
+                    }
                     "/vdisplay-list" -> json(
                         mapOf(
                             "displays" to VirtualDisplay.list(),
@@ -240,7 +248,7 @@ class PhoneToolService : Service() {
         mapOf(
             "service" to "phone-agent-tools",
             "endpoints" to listOf(
-                "/status", "/ports", "/ui-dump", "/screenshot", "/tap", "/input",
+                "/status", "/ports", "/ui-dump", "/a11y-dump", "/screenshot", "/tap", "/input",
                 "/key", "/shell", "/clipboard", "/device",
                 "/vdisplay-create", "/vdisplay-destroy", "/vdisplay-launch", "/vdisplay-tap", "/vdisplay-list",
             ),

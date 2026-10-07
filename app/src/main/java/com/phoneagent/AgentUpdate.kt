@@ -30,7 +30,7 @@ object AgentUpdate {
      * HttpURLConnection ignores the proxy Prefs on its own, so on proxy-only
      * networks every request timed out ("无法获取元数据：timeout").
      */
-    private fun open(ctx: Context, url: String): HttpURLConnection {
+    fun open(ctx: Context, url: String): HttpURLConnection {
         val proxy = Prefs.httpProxy(ctx)
         if (proxy.isNotEmpty()) {
             runCatching {

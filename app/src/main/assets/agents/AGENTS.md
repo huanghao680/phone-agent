@@ -11,6 +11,21 @@
 - 网络走本 App 注入的 CA/代理环境变量。**zcode 的 WebFetch 工具在本环境不可用**（会卡满超时），抓网页请用 bash + node（fetch/https）。
 - dsh 会话可能运行在 workspace-write 沙盒下：工作区与 `$TMPDIR` 可写，其余路径写入被拒、`/sdcard` 不可见——这是预期行为，不是故障。
 
+## 本机设备工具（phone-agent 提供）
+
+本机回环地址 127.0.0.1:8899 有一个设备工具服务，`usr/bin` 里有现成封装，**可直接调用**：
+
+- `pa-screenshot > $TMPDIR/shot.png` —— 截取当前屏幕（PNG 到 stdout）
+- `pa-ui-dump` —— 当前界面 UI 层级树（JSON，`xml` 字段是 uiautomator dump）
+- `pa-tap <x> <y>` —— 点击绝对像素坐标（越界坐标会被拒绝）
+- `pa-input <文本>` —— 输入文本；ASCII 直接键入，**中文等非 ASCII 走剪贴板粘贴**（需先用 `pa-tap` 聚焦目标输入框）
+- `pa-key <KEYCODE>` —— 按键，如 `pa-key KEYCODE_BACK`
+- `pa-shell <命令>` —— 以 shell(uid 2000) 权限执行命令（需 Shizuku 授权；可读全机端口、appops、dumpsys）
+- `pa-clip` 读剪贴板 / `pa-clip <文本>` 写剪贴板
+- `pa-ports` / `pa-device` —— 本机监听端口表 / 设备信息
+
+坐标一律绝对像素（屏幕原点左上）。操作前先 `pa-ui-dump` 看清界面再动手。
+
 ## 更新政策（必须遵守）
 
 - **禁止自行更新 agent 本体或任何全局包。** 不要运行 `npm install -g`、`npm i -g`、`corepack` 等全局安装/更新命令：本环境的全局前缀不可写，这些命令必然失败，并可能破坏槽位布局。

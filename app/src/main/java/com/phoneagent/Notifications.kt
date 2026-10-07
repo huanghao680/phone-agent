@@ -29,7 +29,7 @@ object Notifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setSmallIcon(R.drawable.ic_terminal_fg)
             .setContentTitle("Phone Agent")
             .setContentText(text)
             .setContentIntent(pi)
@@ -52,7 +52,7 @@ object Notifications {
     fun build(ctx: Context, text: String): Notification {
         ensureChannel(ctx)
         return Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setSmallIcon(R.drawable.ic_terminal_fg)
             .setContentTitle("Phone Agent")
             .setContentText(text)
             .setOngoing(true)
