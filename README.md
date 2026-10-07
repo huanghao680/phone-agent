@@ -263,6 +263,19 @@ dsh 的 Web GUI 自带 **插件** 管理页（侧边栏 → 插件），由 `dsh
 - [Magisk-Modules-Alt-Repo/node](https://github.com/Magisk-Modules-Alt-Repo/node) — 与本项目 root 集成同构的先例（`system/usr/share/node` + `/system/bin` 包装脚本）；本项目用动态链接的 Termux Node，wrapper 内自带 `LD_LIBRARY_PATH`。
 - [JaneaSystems/nodejs-mobile](https://github.com/JaneaSystems/nodejs-mobile) — 早期内嵌 Node 方案，已停更（Node 18，不满足 zcode 的 ≥22.19）。
 
+### 本轮新增对标（2026-10-08 调研）
+
+| 项目 | 星 | 定位 | 判断 |
+|---|---|---|---|
+| [techjarves/Mobile-Harness](https://github.com/techjarves/Mobile-Harness) | 522 | Kotlin + Jetpack Compose，**PRoot 跑 Ubuntu 20.04**，内置 Claude / DeepSeek / Antigravity 三 agent，免 root | **最直接竞品**——比 DeepCode 更接近我们的多 agent 定位。借鉴了它的 console 遥测与 agent 注册表思想 |
+| [callstack/agent-device](https://github.com/callstack/agent-device) | 4918 | 给 AI coding agent 用的移动自动化（CLI + MCP），Shopify/Expensify 在用 | 不是同类产品，但**快照设计成熟**：ref 寻址 + `--settle` 后返回 diff 而非全树 + 只输出可交互元素。我们照此改造了 `/a11y-dump` |
+| [moke](https://github.com/briqt/moke) / [termux-ai-app](https://github.com/thejaustin/termux-ai-app) / [Shelly](https://github.com/RYOITABASHI/Shelly) | 142 / 60 / 66 | SSH 终端、Termux 上跑 Claude Code、手机端 AI 终端 IDE | 依赖 Termux 或远端机器，与「APK 自带运行时」路线不同，参考有限 |
+
+从中落地（v0.7.95）：
+- **`/a11y-dump` 的 ref + diff**（agent-device）：`mode=interactive` 只吐可操作节点（全量 dump 大部分是静态文本），`diff=true` 返回 `+`/`-`/`=` 行与增删计数，ref 形如 `@eN` 且仅对本次输出有效。实测：选择器页 7 个 ref；点击进设置页后返回 `+10/-7`。
+- **浏览器 console 遥测**（Mobile-Harness）：`WebChromeClient` 捕获 console/alert，`/browser-console` 与快照里都能取到——agent 调试自己的开发服务器能看到报错而不只是 DOM。
+- **AgentRegistry**（Mobile-Harness 的 agent 注册表思想）：agent 的身份（标签/类型/端口/Activity/Service/文案/图标/是否需解包）原先散落在选择器、设置页、各 Service 与看门狗的分支里，现在集中为一张表，选择器卡片与看门狗目标都从它生成——**加第 6 个 agent 只需改一处**。
+
 ### dsh-mobile-apk / DeepCode（2026-10 对标与借鉴）
 
 [kelai141/dsh-mobile-apk](https://github.com/kelai141/dsh-mobile-apk) — MIT，2026-10 时 634⭐/72 fork，**是这个赛道里唯一有真实用户量的同类独立 APK**（单做 dsh 的安卓壳：WebView UI + 内嵌 Termux 运行时快照解压即跑）。技术路线与我们高度同源（xz 快照解压即跑、manifest 驱动的整树替换更新、固定 debug.keystore 支持 `adb install -r` 覆盖安装），也踩过同批坑（Termux 编译期路径、`OPENSSL_CONF`、pnpm store 锁、run-as 引号地狱、签名一致性），其 1390 行 `docs/AGENTS/gotchas.md` 与我们的坑位记录几乎互为镜像。
