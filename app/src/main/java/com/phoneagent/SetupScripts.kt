@@ -170,7 +170,23 @@ if [ ! -f "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" ]; then
   exec /system/bin/sh
 fi
 
-exec "${'$'}NODE" "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" --profile tui
+# dsh 0.2.0 has NO terminal surface (verified: only web/headless/sdk/acp bundles
+# ship a cordis.patch.yml; the old --profile tui of 0.1.x is gone with its
+# ink-based UI). The interactive surface is the Web UI — the "DeepSeek Harness"
+# launcher icon. This card gives a working dsh CLI shell against the tui profile
+# for headless/one-shot commands; `dsh headless "task"` answers and exits.
+TUI_PROFILE="${'$'}HOME/.dsh/profiles/tui"
+if [ ! -f "${'$'}TUI_PROFILE/package.json" ]; then
+  echo "[phone-agent] 创建 dsh tui profile …"
+  mkdir -p "${'$'}TUI_PROFILE"
+  printf '%s\n' '{' '  "name": "dsh-profile-tui",' '  "private": true,' '  "dependencies": {},' '  "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base"] } }' '}' > "${'$'}TUI_PROFILE/package.json"
+fi
+
+echo "[phone-agent] dsh 0.2.x 没有终端交互界面（官方只剩 web/headless/sdk/acp 表面）。"
+echo "[phone-agent] 交互对话请用桌面上的「DeepSeek Harness」图标（Web UI）。"
+echo "[phone-agent] 这里可以跑 CLI：dsh headless \"任务\" 一次性执行；dsh plugin --profile tui add <插件> 装插件。"
+echo
+exec /system/bin/sh
 """.trim() + "\n"
         return write(ctx, "run-dsh-tui.sh", body)
     }

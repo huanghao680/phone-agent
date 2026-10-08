@@ -43,7 +43,7 @@ class ZcodeTerminalActivity : ComponentActivity() {
             else -> "Zcode TUI"
         }
 
-        val existing = SessionHolder.current
+        val existing = SessionHolder.current()
         val existingMatches = existing != null && existing.isRunning() &&
             SessionHolder.pendingAgent == SessionHolder.currentAgent
         if (existingMatches) {
@@ -54,7 +54,7 @@ class ZcodeTerminalActivity : ComponentActivity() {
             ExtraKeys.attach(
                 findViewById(R.id.extra_keys),
                 findViewById(R.id.extra_keys_scroll),
-            ) { SessionHolder.current }
+            ) { SessionHolder.current() }
         } else {
             thread(name = "runtime-extract") {
                 if (!NodeRuntime.isRuntimeExtracted(this)) {
@@ -102,14 +102,14 @@ class ZcodeTerminalActivity : ComponentActivity() {
             null,
             sessionClient,
         )
-        SessionHolder.current = session
-        SessionHolder.currentAgent = SessionHolder.pendingAgent
+        SessionHolder.nodeSessions[agent] = session
+        SessionHolder.currentAgent = agent
         terminalView.requestFocus();
         terminalView.attachSession(session)
         ExtraKeys.attach(
             findViewById(R.id.extra_keys),
             findViewById(R.id.extra_keys_scroll),
-        ) { SessionHolder.current }
+        ) { SessionHolder.current() }
         val svcIntent = Intent(this, SessionService::class.java).putExtra("agent", SessionHolder.pendingAgent)
         startForegroundService(svcIntent)
     }
@@ -226,12 +226,14 @@ class ZcodeTerminalActivity : ComponentActivity() {
 
 /** Keeps the terminal session alive across activity restarts. */
 object SessionHolder {
-    @Volatile var current: TerminalSession? = null
+    /** Live Node-CLI TUI sessions, keyed by agent ("zcode" | "dsh"). */
+    @Volatile var nodeSessions: MutableMap<String, TerminalSession> =
+        java.util.concurrent.ConcurrentHashMap()
 
-    /** Which agent TUI the user picked in TerminalPickerActivity ("zcode" | "dsh"). */
+    /** Legacy single-session view used by older call sites (returns the zcode/dsh one). */
     @Volatile var pendingAgent: String = "zcode"
 
-    /** Agent the current session was started with, so a mismatched pick restarts it. */
+    /** Agent the visible session was started with. */
     @Volatile var currentAgent: String = "zcode"
 
     /** File paths handed over from another app, consumed by the next session start. */
@@ -240,4 +242,9 @@ object SessionHolder {
     /** Live sessions for the standalone binary TUIs, keyed by agent name. */
     @Volatile var binarySessions: MutableMap<String, TerminalSession> =
         java.util.concurrent.ConcurrentHashMap()
+
+    fun current(): TerminalSession? = nodeSessions[currentAgent]
+
+    /** True when [agent] already has a live TUI in the background. */
+    fun hasLive(agent: String): Boolean = nodeSessions[agent]?.isRunning() == true
 }
