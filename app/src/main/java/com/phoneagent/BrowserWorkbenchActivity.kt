@@ -1,6 +1,7 @@
 package com.phoneagent
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -142,6 +143,17 @@ class BrowserWorkbenchActivity : ComponentActivity() {
                 r?.confirm()
                 return true
             }
+            // file inputs route through the shared AttachmentBridge, same as the
+            // webUI activities — without this a file input does nothing
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: android.webkit.ValueCallback<Array<android.net.Uri>>?,
+                fileChooserParams: FileChooserParams?,
+            ): Boolean {
+                return AttachmentBridge.fileChooserCallback(
+                    this@BrowserWorkbenchActivity, filePathCallback, fileChooserParams,
+                )
+            }
         }
         instance = this
         val url = intent.getStringExtra("url")
@@ -152,5 +164,11 @@ class BrowserWorkbenchActivity : ComponentActivity() {
         if (instance === this) instance = null
         web.destroy()
         super.onDestroy()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (AttachmentBridge.onResult(requestCode, resultCode, data)) return
+        super.onActivityResult(requestCode, resultCode, data)
     }
 }

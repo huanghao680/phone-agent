@@ -22,6 +22,34 @@ object AttachmentBridge {
 
     private var callback: ValueCallback<Array<Uri>>? = null
 
+    /**
+     * Delegates a chooser request to the system pickers. Shared by attach()'s
+     * WebChromeClient and the browser workbench's own client.
+     */
+    fun fileChooserCallback(
+        activity: Activity,
+        filePathCallback: ValueCallback<Array<Uri>>?,
+        fileChooserParams: android.webkit.WebChromeClient.FileChooserParams?,
+    ): Boolean {
+        callback?.onReceiveValue(null)
+        callback = filePathCallback
+        val acceptImages = acceptsImages(fileChooserParams)
+        val intent = if (acceptImages) {
+            Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                .setType("image/*")
+        } else {
+            Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        val chooser = Intent.createChooser(intent, if (acceptImages) "选择图片" else "选择文件")
+        return try {
+            activity.startActivityForResult(chooser, REQ)
+            true
+        } catch (_: Exception) {
+            callback = null
+            false
+        }
+    }
+
     fun attach(activity: Activity, webView: WebView) {
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
@@ -29,23 +57,7 @@ object AttachmentBridge {
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?,
             ): Boolean {
-                callback?.onReceiveValue(null)
-                callback = filePathCallback
-                val acceptImages = acceptsImages(fileChooserParams)
-                val intent = if (acceptImages) {
-                    Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-                        .setType("image/*")
-                } else {
-                    Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
-                }
-                val chooser = Intent.createChooser(intent, if (acceptImages) "选择图片" else "选择文件")
-                return try {
-                    activity.startActivityForResult(chooser, REQ)
-                    true
-                } catch (_: Exception) {
-                    callback = null
-                    false
-                }
+                return fileChooserCallback(activity, filePathCallback, fileChooserParams)
             }
         }
     }
