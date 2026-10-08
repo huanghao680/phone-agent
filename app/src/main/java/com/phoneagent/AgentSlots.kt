@@ -96,7 +96,15 @@ object AgentSlots {
         val target = slotPackageDir(ctx, pkg, s.active)
         link.parentFile?.mkdirs()
         val linkIsSymlink = java.nio.file.Files.isSymbolicLink(link.toPath())
-        if ((link.exists() && !link.isDirectory) || linkIsSymlink) link.delete()
+        if (linkIsSymlink || (link.exists() && !link.isDirectory)) {
+            link.delete()
+        } else if (link.isDirectory) {
+            // A real directory left behind by an interrupted migration can never
+            // be replaced by delete() alone, and while it sits there every boot
+            // reads the tree as "not the pinned install" and reinstalls (measured:
+            // +6s cold start). Swap it for the symlink the slots expect.
+            if (!link.deleteRecursively()) return
+        }
         if (!link.exists()) {
             runCatching {
                 java.nio.file.Files.createSymbolicLink(link.toPath(), target.toPath())
@@ -248,13 +256,35 @@ object AgentSlots {
     fun activeNeedsPinned(ctx: Context, pkg: String, want: String): Boolean {
         migrateLegacy(ctx, pkg)
         val s = read(ctx, pkg)
+        android.util.Log.w("agent-slots", "needsPinned $pkg: state=${s?.state} active=${s?.active} v=${s?.activeVersion} want=$want")
         if (s != null && s.state != "verified") return false // an update is in flight
-        val manifest = legacyDir(ctx, pkg)
-        if (!manifest.exists()) return true
-        val installed = runCatching {
+        // A leftover real directory where the active symlink belongs (an
+        // interrupted migration) hides the slot tree from this check and used to
+        // force a full reinstall on every boot. Repair the link first.
+        if (s != null) {
+            val link = legacyDir(ctx, pkg)
+            if (!java.nio.file.Files.isSymbolicLink(link.toPath())) {
+                android.util.Log.w("agent-slots", "needsPinned $pkg: link is a real dir, repairing")
+                linkActive(ctx, pkg)
+            }
+        }
+        // NOTE: legacyDir() is the package DIRECTORY; the version manifest is
+        // package.json inside it. Reading the directory itself always threw
+        // EISDIR here, so installed= was always null and every cold start
+        // reinstalled the agent (measured: +6s).
+        val manifest = java.io.File(legacyDir(ctx, pkg), "package.json")
+        if (!manifest.exists()) {
+            android.util.Log.w("agent-slots", "needsPinned $pkg: manifest MISSING at ${manifest.absolutePath}")
+            return true
+        }
+        val installed = try {
             JSONObject(manifest.readText()).optString("version").ifEmpty { null }
-        }.getOrNull() ?: return true
-        return compareVersions(installed, want) < 0
+        } catch (e: Exception) {
+            android.util.Log.w("agent-slots", "needsPinned $pkg: manifest parse FAILED: ${e.message?.take(120)}")
+            null
+        }
+        android.util.Log.w("agent-slots", "needsPinned $pkg: installed=$installed -> needs=${installed == null || compareVersions(installed, want) < 0}")
+        return installed == null || compareVersions(installed, want) < 0
     }
 
     /**

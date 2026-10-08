@@ -31,6 +31,17 @@ object Prefs {
      * One-time migration: the DeepSeek key used to live in this plain file;
      * move it to the encrypted store on first read after the upgrade.
      */
+    /**
+     * Global web-UI zoom, in percent (50..150). Applied as the WebView's
+     * initial scale AND as the viewport width factor, so the chosen ratio is
+     * what the user actually sees, not just a pinch starting point.
+     */
+    fun webUiScale(ctx: Context): Int = sp(ctx).getInt("web_ui_scale", 100).coerceIn(50, 150)
+
+    fun setWebUiScale(ctx: Context, v: Int) {
+        sp(ctx).edit().putInt("web_ui_scale", v.coerceIn(50, 150)).apply()
+    }
+
     /** Restore the previously running web engines after a reboot. */
     fun restoreOnBoot(ctx: Context): Boolean = sp(ctx).getBoolean("restore_on_boot", false)
 

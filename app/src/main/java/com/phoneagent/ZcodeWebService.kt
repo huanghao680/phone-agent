@@ -30,12 +30,23 @@ class ZcodeWebService : Service() {
         Notifications.ensureChannel(this)
     }
 
+    @Volatile private var booting = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(Notifications.ID_ZCODE_WEB, Notifications.build(this, "正在启动 Zcode Web…"))
+        // same double-start path as DshService (restore + activity); dedupe
+        if (booting || proc?.isAlive == true) return START_STICKY
         ZcodeWebState.ready = false
         ZcodeWebState.lastError = null
         NodeRuntime.ensureToolWrappers(this)
-        thread(name = "zcode-web-boot") { boot() }
+        booting = true
+        thread(name = "zcode-web-boot") {
+            try {
+                boot()
+            } finally {
+                booting = false
+            }
+        }
         return START_STICKY
     }
 

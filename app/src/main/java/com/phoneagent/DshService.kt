@@ -37,11 +37,24 @@ class DshService : Service() {
         Notifications.ensureChannel(this)
     }
 
+    @Volatile private var booting = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(Notifications.ID_DSH, Notifications.build(this, "正在启动 DeepSeek Harness…"))
+        // EngineState.restoreAll (app onCreate) and the Activity both start this
+        // service within the same second; two concurrent boots double every
+        // patch/check and race on the same files. A boot in progress wins.
+        if (booting || proc?.isAlive == true) return START_STICKY
         DshState.serverReady = false
         DshState.lastError = null
-        thread(name = "dsh-boot") { boot() }
+        booting = true
+        thread(name = "dsh-boot") {
+            try {
+                boot()
+            } finally {
+                booting = false
+            }
+        }
         return START_STICKY
     }
 
@@ -53,11 +66,19 @@ class DshService : Service() {
     private fun boot() = boot(retryAfterRevert = false)
 
     private fun boot(retryAfterRevert: Boolean) {
+        // phase timing goes to logcat (dsh-boot): cold start used to be a black
+        // box; the breakdown is how we find out what to optimize next
+        val t0 = android.os.SystemClock.uptimeMillis()
+        fun mark(what: String) {
+            android.util.Log.i("dsh-boot", "$what at ${android.os.SystemClock.uptimeMillis() - t0}ms")
+        }
+        mark("boot begin")
         try {
             if (!NodeRuntime.isRuntimeExtracted(this)) {
                 notify("正在解压 Node 运行时…")
                 NodeRuntime.extractRuntime(this)
             }
+            mark("runtime extracted")
             // bwrap shim + sandbox-mode file: the web GUI itself runs
             // danger-full-access, but headless/CLI profiles spawned from
             // sessions inherit this runtime and need the sandbox staged
@@ -65,6 +86,7 @@ class DshService : Service() {
             NodeRuntime.ensureToolWrappers(this)
             // pnpm must be spawnable or every `dsh plugin` op fails with EACCES
             NodeRuntime.ensurePnpmExecutable(this)
+            mark("sandbox+wrappers+pnpm-heal")
             // must-read environment/update policy for agent sessions
             NodeRuntime.seedAgentInstructions(this)
             // storage access facts, measured from this process (the app's own
@@ -74,7 +96,13 @@ class DshService : Service() {
             } catch (_: Exception) {
                 // diagnostics must never keep the service from starting
             }
-            if (Bootstrap.dshNeedsInstall(this)) {
+            mark("  seedAgentInstructions")
+            try { StorageDiag.run(this) } catch (_: Exception) {}
+            mark("  storageDiag")
+            val needsInstall = Bootstrap.dshNeedsInstall(this)
+            mark("  dshNeedsInstall=$needsInstall")
+            mark("instructions+diag")
+            if (needsInstall) {
                 notify("正在安装 zcode / dsh 组件（首次需联网）…")
                 val ok = Bootstrap.install(this) { line -> appendLog(line) }
                 if (!ok) {
@@ -83,18 +111,19 @@ class DshService : Service() {
                     return
                 }
             }
+            mark("  re-stage: sandbox/wrappers/pnpm")
             // the package tree may have just been replaced: re-stage the shim
             // and rewrite the sandbox-mode file for the new version
-            NodeRuntime.ensureSandboxTools(this)
-            NodeRuntime.ensureToolWrappers(this)
-            // pnpm must be spawnable or every `dsh plugin` op fails with EACCES
-            NodeRuntime.ensurePnpmExecutable(this)
+            mark("re-stage after install")
             // A/B: a pending update becomes active for THIS boot; if the boot
             // fails below, revertFailedBoot swaps back and we retry once
             val verifying = AgentSlots.beginBoot(this, AgentSlots.DSH) { line -> appendLog(line) } > 0
+            mark("  beginBoot verifying=$verifying")
             // an agent may have rewritten the tree from inside a session: adopt
             // the real version and re-apply the Android patches
             AgentSlots.reconcile(this, AgentSlots.DSH) { line -> appendLog(line) }
+            mark("  reconcile done")
+            mark("A/B boot + reconcile")
             // dsh uses the invoking directory as its workspace root
             val workDir = File(
                 StorageAccess.defaultWorkspace(this),
@@ -114,12 +143,15 @@ class DshService : Service() {
             // EADDRINUSE, and then its required plugins never activate — which
             // reads as "plugin is broken" rather than "port is taken". Clean
             // stale listeners first (same /proc scan as the opencode service).
+            mark("  killStaleWeb begin")
             killStaleWeb()
+            mark("  killStaleWeb done")
             pb.environment().putAll(
                 NodeRuntime.environment(this, mapOf("DEEPSEEK_API_KEY" to SecretStore.deepseekKey(this)))
             )
             pb.redirectErrorStream(true)
             val p = pb.start()
+            mark("dsh process spawned")
             proc = p
             DshState.process = p
             thread(name = "dsh-log") {
@@ -137,6 +169,7 @@ class DshService : Service() {
             // The port opens well before the web profile finishes booting; the
             // real readiness signal is the authenticated URL printed on stdout.
             val ready = versionOk && awaitTokenUrl(timeoutMs = 150_000)
+            mark("token URL received (ready=$ready)")
             if (ready) {
                 AgentSlots.markBootOk(this, AgentSlots.DSH)
                 DshState.serverReady = true
@@ -223,10 +256,24 @@ class DshService : Service() {
             p.waitFor()
         } catch (_: Exception) {
         }
-        // let the kernel release the socket before we bind
-        try {
-            Thread.sleep(700)
-        } catch (_: InterruptedException) {
+        // Wait for the port to actually be released (bounded); a fixed sleep
+        // both wastes time on a clean boot and can be too short after a kill.
+        val deadline = System.currentTimeMillis() + 3000
+        while (System.currentTimeMillis() < deadline) {
+            if (!portBound(3080)) return
+            try {
+                Thread.sleep(150)
+            } catch (_: InterruptedException) {
+                return
+            }
         }
+    }
+
+    private fun portBound(port: Int): Boolean = try {
+        java.net.ServerSocket(port).use { false }
+    } catch (_: java.net.BindException) {
+        true // still held
+    } catch (_: Exception) {
+        false // anything else: assume free
     }
 }

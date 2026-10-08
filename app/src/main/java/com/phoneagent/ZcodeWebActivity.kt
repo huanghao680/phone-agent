@@ -28,12 +28,13 @@ class ZcodeWebActivity : ComponentActivity() {
         errorText = findViewById(R.id.error_text)
         findViewById<Button>(R.id.retry).setOnClickListener { connect() }
 
-        webView.applyWebUiSettings()
+        val webScale = Prefs.webUiScale(this)
+        WebUi.apply(webView, webScale)
         AttachmentBridge.attach(this, webView)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                view?.evaluateJavascript(WEBVIEW_PATCH_JS +
+                view?.evaluateJavascript(WebUi.patchJs(webScale) +
                     """
                     (function(){
                       var s=document.createElement('style');

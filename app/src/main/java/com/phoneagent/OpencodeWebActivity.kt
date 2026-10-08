@@ -35,7 +35,8 @@ class OpencodeWebActivity : ComponentActivity() {
         errorText = findViewById(R.id.error_text)
         findViewById<Button>(R.id.retry).setOnClickListener { connect() }
 
-        webView.applyWebUiSettings()
+        val webScale = Prefs.webUiScale(this)
+        WebUi.apply(webView, webScale)
         AttachmentBridge.attach(this, webView)
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, req: WebResourceRequest?, err: WebResourceError?) {
@@ -46,7 +47,7 @@ class OpencodeWebActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                view?.evaluateJavascript(WEBVIEW_PATCH_JS, null)
+                view?.evaluateJavascript(WebUi.patchJs(webScale), null)
             }
         }
         connect()

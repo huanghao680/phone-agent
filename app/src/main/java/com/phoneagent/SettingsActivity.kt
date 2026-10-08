@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -199,6 +200,43 @@ class SettingsActivity : ComponentActivity() {
                                         AgentUpdate.rollback(this@SettingsActivity, row.second) { line -> log.append(line).append('\n') }
                                         ui { updateStatus = log.toString().trim() }
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item { GroupTitle("界面缩放") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            var scale by remember { mutableStateOf(Prefs.webUiScale(this@SettingsActivity)) }
+                            val steps = listOf(50, 65, 80, 100, 125, 150)
+                            M3Text(
+                                "Web 界面整体缩放：$scale%",
+                                color = MiuixTheme.colorScheme.onSurface,
+                                fontSize = 14.sp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            M3Text(
+                                "作用于 Zcode / DeepSeek Harness / opencode 三个 Web 界面，" +
+                                    "下次打开界面生效（也决定双指缩放的下限）",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Row {
+                                for (v in steps) {
+                                    val on = scale == v
+                                    androidx.compose.material3.FilterChip(
+                                        selected = on,
+                                        onClick = {
+                                            scale = v
+                                            Prefs.setWebUiScale(this@SettingsActivity, v)
+                                        },
+                                        label = { M3Text("$v%", fontSize = 12.sp) },
+                                        modifier = Modifier.padding(end = 6.dp),
+                                    )
                                 }
                             }
                         }
