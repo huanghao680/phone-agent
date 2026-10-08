@@ -221,6 +221,11 @@ export async function tryLockExclusive(fd) {
 {
   const OLD = '/data/data/com.termux/files/usr';
   const ENV_OLD = '#!/usr/bin/env '; // Android has no /usr/bin/env
+  // Rewriting to `${USR}/bin/env ` is not enough: our `env` is the Termux
+  // binary and fails to link in a spawned child (libandroid-support.so not
+  // found -> EACCES), which broke `dsh plugin` (it spawns pnpm). Point
+  // shebangs straight at the real node binary instead.
+  const NODE_BIN = join(USR, 'bin/node');
   let count = 0;
   const rewrite = (file) => {
     let head;
@@ -235,7 +240,16 @@ export async function tryLockExclusive(fd) {
       let text = readFileSync(file, 'utf8');
       if (text.includes('\0')) return; // binary
       const before = text;
-      if (text.startsWith(ENV_OLD)) text = `#!${USR}/bin/env ` + text.slice(ENV_OLD.length);
+      if (text.startsWith(ENV_OLD)) {
+        const rest = text.slice(ENV_OLD.length);
+        // "#!/usr/bin/env node" -> "#!<USR>/bin/node"; keep other interpreters
+        // (sh/python/...) on a plain rewrite so we do not silently swap binaries
+        const first = rest.split(/[\s
+]/)[0] || '';
+        text = first === 'node' || first === 'nodejs'
+          ? `#!${NODE_BIN}` + rest.slice(first.length)
+          : `#!${USR}/bin/env ` + rest;
+      }
       text = text.split(OLD).join(USR);
       if (text !== before) {
         writeFileSync(file, text);
@@ -253,6 +267,13 @@ export async function tryLockExclusive(fd) {
     }
   } catch {
     /* no node_modules yet */
+  }
+  // pnpm is installed *after* this patch runs, and its bundled dist carries the
+  // Termux prefix inside pnpm.cjs (temp-dir -> realpathSync('/data/data/com.termux')
+  // -> ENOENT), which is what made `dsh plugin` fail. Cover it explicitly.
+  for (const rel of ['lib/node_modules/pnpm/bin', 'lib/node_modules/pnpm/dist']) {
+    const dir = join(USR, rel);
+    if (existsSync(dir)) targets.push(dir);
   }
   for (const dir of targets) {
     if (!existsSync(dir)) continue;

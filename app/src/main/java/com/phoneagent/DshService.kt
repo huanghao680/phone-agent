@@ -63,6 +63,8 @@ class DshService : Service() {
             // sessions inherit this runtime and need the sandbox staged
             NodeRuntime.ensureSandboxTools(this)
             NodeRuntime.ensureToolWrappers(this)
+            // pnpm must be spawnable or every `dsh plugin` op fails with EACCES
+            NodeRuntime.ensurePnpmExecutable(this)
             // must-read environment/update policy for agent sessions
             NodeRuntime.seedAgentInstructions(this)
             // storage access facts, measured from this process (the app's own
@@ -85,6 +87,8 @@ class DshService : Service() {
             // and rewrite the sandbox-mode file for the new version
             NodeRuntime.ensureSandboxTools(this)
             NodeRuntime.ensureToolWrappers(this)
+            // pnpm must be spawnable or every `dsh plugin` op fails with EACCES
+            NodeRuntime.ensurePnpmExecutable(this)
             // A/B: a pending update becomes active for THIS boot; if the boot
             // fails below, revertFailedBoot swaps back and we retry once
             val verifying = AgentSlots.beginBoot(this, AgentSlots.DSH) { line -> appendLog(line) } > 0
@@ -106,6 +110,11 @@ class DshService : Service() {
             )
             val pb = ProcessBuilder(args)
             if (workDir.isDirectory) pb.directory(workDir)
+            // A previous dsh still holding 3080 makes the new one die with
+            // EADDRINUSE, and then its required plugins never activate — which
+            // reads as "plugin is broken" rather than "port is taken". Clean
+            // stale listeners first (same /proc scan as the opencode service).
+            killStaleWeb()
             pb.environment().putAll(
                 NodeRuntime.environment(this, mapOf("DEEPSEEK_API_KEY" to SecretStore.deepseekKey(this)))
             )
@@ -195,4 +204,29 @@ class DshService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /**
+     * Kills a leftover dsh web process. Without this the new one dies with
+     * EADDRINUSE, its required plugins never activate, and the failure surfaces
+     * as "2 required plugins did not activate" — which looks like a plugin bug
+     * but is just the port being held. Only matches dsh's own argv.
+     */
+    private fun killStaleWeb() {
+        val cmdline = "for p in /proc/[0-9]*; do " +
+            "c=$(tr '\\000' ' ' < \$p/cmdline 2>/dev/null) || continue; " +
+            "case \"\$c\" in *'dsh web'*|*'bin.js web'*) kill \${p#/proc/} 2>/dev/null;; esac; done"
+        try {
+            val pb = ProcessBuilder("/system/bin/sh", "-c", cmdline)
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            p.inputStream.use { it.readBytes() }
+            p.waitFor()
+        } catch (_: Exception) {
+        }
+        // let the kernel release the socket before we bind
+        try {
+            Thread.sleep(700)
+        } catch (_: InterruptedException) {
+        }
+    }
 }

@@ -315,7 +315,115 @@ exec curl -s --max-time 15 "http://127.0.0.1:8899/device"
      * support, and corepack no longer ships with Node. No-op when the pinned
      * version is already present.
      */
+    /**
+     * Keeps pnpm spawnable: `dsh plugin` shells out to `pnpm`, and npm-installed
+     * bin scripts land mode 600 (no exec bit) — the app domain can read them but
+     * spawning fails with EACCES, which surfaces as
+     * "plugin command failed; Command failed with EACCES: pnpm --help".
+     * Runs on every boot because the bit can be lost by any runtime rewrite.
+     */
+    fun ensurePnpmExecutable(ctx: Context) {
+        val usr = usrDir(ctx)
+        val node = File(usr, "bin/node")
+        for (f in arrayOf(
+            File(usr, "bin/pnpm"),
+            File(usr, "lib/node_modules/pnpm/bin/pnpm.cjs"),
+            File(usr, "lib/node_modules/npm/bin/npm-cli.js"),
+            File(usr, "lib/node_modules/npm/bin/npx-cli.js"),
+        )) {
+            try {
+                if (!f.exists()) continue
+                if (!f.canExecute()) f.setExecutable(true, false)
+                // a shebang pointing at our `env` cannot be spawned (the Termux
+                // env binary fails to link in a child process), so retarget it
+                // at the real node binary for already-installed copies
+                retargetShebang(f, node)
+            } catch (_: Exception) {
+            }
+        }
+        // the bundled dist is a single big file with the prefix inside it
+        rewriteTermuxPrefix(File(usr, "lib/node_modules/pnpm/dist/pnpm.cjs"), usr)
+        // Last mile: dsh's plugin manager spawns `pnpm` with a sanitized env, so
+        // the dynamic-linker search path is missing and exec dies as EACCES
+        // ("spawn pnpm EACCES"). A self-sufficient wrapper (same trick as the
+        // bwrap shim) exports what it needs and execs the real script.
+        installPnpmWrapper(ctx, usr)
+    }
+
+    /** Writes usr/bin/pnpm as a wrapper instead of a symlink, then execs the real one. */
+    private fun installPnpmWrapper(ctx: Context, usr: File) {
+        val script = File(usr, "bin/pnpm")
+        val real = File(usr, "lib/node_modules/pnpm/bin/pnpm.cjs")
+        if (!real.exists()) return
+        val body = """
+#!/system/bin/sh
+# Self-sufficient launcher: the plugin manager spawns this with a sanitized env,
+# so the linker path and TMPDIR (node is built with the Termux prefix and its
+# temp derivation fails without it) are exported here.
+USR="$usr"
+export LD_LIBRARY_PATH="$usr/lib${'$'}{LD_LIBRARY_PATH:+:${'$'}LD_LIBRARY_PATH}"
+export TMPDIR="${'$'}{TMPDIR:-${ctx.cacheDir.absolutePath}}"
+export PATH="$usr/bin:${'$'}PATH"
+exec "$usr/bin/node" "$real" "${'$'}@"
+""".trimIndent()
+        try {
+            if (script.isFile && script.readText() == body) {
+                if (!script.canExecute()) script.setExecutable(true, false)
+                return
+            }
+            if (script.exists() || java.nio.file.Files.isSymbolicLink(script.toPath())) script.delete()
+            script.writeText(body)
+            script.setExecutable(true, false)
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Rewrites a Node script's shebang from `/usr/bin/env node` to the real node
+     * binary. Our `env` is the Termux one and fails to link when spawned
+     * (`libandroid-support.so not found`), which is why `dsh plugin` — it spawns
+     * pnpm — died with "spawn pnpm EACCES".
+     */
+    /**
+     * Replaces the baked-in Termux prefix inside an already-installed pnpm.
+     * `pnpm.cjs` bundles temp-dir, whose realpathSync('/data/data/com.termux')
+     * throws ENOENT here — and pnpm is installed after the patch script runs.
+     */
+    private fun rewriteTermuxPrefix(f: File, usr: File) {
+        val old = "/data/data/com.termux/files/usr"
+        val text = try {
+            f.readText()
+        } catch (_: Exception) {
+            return
+        }
+        if (!text.contains(old)) return
+        try {
+            f.writeText(text.replace(old, usr.absolutePath))
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun retargetShebang(f: File, node: File) {
+        if (!node.canExecute()) return
+        val text = try {
+            f.readText()
+        } catch (_: Exception) {
+            return
+        }
+        if (!text.startsWith("#!")) return
+        val nl = text.indexOf('\n')
+        if (nl <= 0) return
+        val first = text.substring(0, nl)
+        if (!first.contains("/usr/bin/env node")) return
+        val rest = first.substringAfter("env node")
+        try {
+            f.writeText("#!" + node.absolutePath + rest + text.substring(nl))
+        } catch (_: Exception) {
+        }
+    }
+
     private fun ensurePnpm(ctx: Context) {
+        ensurePnpmExecutable(ctx)
         val usr = usrDir(ctx)
         val manifest = File(usr, "lib/node_modules/pnpm/package.json")
         if (manifest.exists()) {
