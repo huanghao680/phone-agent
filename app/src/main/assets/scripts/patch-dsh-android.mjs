@@ -244,8 +244,7 @@ export async function tryLockExclusive(fd) {
         const rest = text.slice(ENV_OLD.length);
         // "#!/usr/bin/env node" -> "#!<USR>/bin/node"; keep other interpreters
         // (sh/python/...) on a plain rewrite so we do not silently swap binaries
-        const first = rest.split(/[\s
-]/)[0] || '';
+        const first = rest.split(/[\s\n]/)[0] || '';
         text = first === 'node' || first === 'nodejs'
           ? `#!${NODE_BIN}` + rest.slice(first.length)
           : `#!${USR}/bin/env ` + rest;

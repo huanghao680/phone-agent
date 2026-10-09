@@ -48,8 +48,20 @@ object NodeRuntime {
     fun extractRuntime(ctx: Context) {
         val root = ctx.filesDir
         val rootPath = root.canonicalPath + File.separator
-        ctx.assets.open("runtime.tar.xz").use { raw ->
-            XZInputStream(raw).use { xz ->
+        // A locally-built APK without the CI staging step has no runtime.tar.xz.
+        // Crash here killed the whole app with a bare FileNotFoundException; fail
+        // with an actionable message instead (the CI artifact is the real APK).
+        val raw = try {
+            ctx.assets.open("runtime.tar.xz")
+        } catch (e: IOException) {
+            throw IllegalStateException(
+                "runtime.tar.xz 不在 APK 资产里：这是未执行 CI staging 的本地构建，" +
+                    "请安装 CI（GitHub Actions build workflow）产出的 APK",
+                e,
+            )
+        }
+        raw.use { raw2 ->
+            XZInputStream(raw2).use { xz ->
                 TarArchiveInputStream(xz).use { tar ->
                     while (true) {
                         val entry: TarArchiveEntry = tar.nextEntry ?: break
