@@ -248,6 +248,15 @@ class UsageActivity : ComponentActivity() {
                                         Spacer(Modifier.width(6.dp))
                                         M3Text("子代理", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 11.sp)
                                     }
+                                    if (s.fromTui) {
+                                        Spacer(Modifier.width(6.dp))
+                                        M3Text(
+                                            "TUI",
+                                            color = Color(0xFF7CC4FF),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 M3Text(

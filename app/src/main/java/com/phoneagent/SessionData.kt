@@ -42,6 +42,8 @@ object SessionData {
         val retries: Int,
         val subagent: Boolean,
         val model: String,
+        /** true when the session was written by a terminal TUI (not the web UI) */
+        val fromTui: Boolean = false,
     )
 
     data class SessionDetail(
@@ -187,18 +189,27 @@ object SessionData {
         val tools: HashMap<String, IntArray>, // name -> [count, errors]
         val models: HashMap<String, LongArray>, // model -> [reqs, in, out, reasoning]
         val inputs: MutableList<String>,
+        val fromTui: Boolean,
     )
 
     private fun dshParseAll(ctx: Context): List<DshParsed> {
         val root = DshUsage.sessionsRoot(ctx)
-        if (!root.isDirectory) return emptyList()
+        val tuiRoot = File(root.parentFile, "sessions-tui")
         val byDir = LinkedHashMap<File, MutableList<File>>()
-        root.walkTopDown().maxDepth(3)
-            .filter { it.isFile && it.name.contains("jsonl") }
-            .forEach { byDir.getOrPut(it.parentFile) { mutableListOf() }.add(it) }
+        val tuiDirs = HashSet<File>()
+        for (r in arrayOf(root, tuiRoot)) {
+            if (!r.isDirectory) continue
+            r.walkTopDown().maxDepth(3)
+                .filter { it.isFile && it.name.contains("jsonl") }
+                .forEach {
+                    byDir.getOrPut(it.parentFile) { mutableListOf() }.add(it)
+                    if (r == tuiRoot) tuiDirs.add(it.parentFile)
+                }
+        }
         val out = mutableListOf<DshParsed>()
         val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         for ((dir, files) in byDir) {
+            val fromTui = dir in tuiDirs
             var parsed: DshParsed? = null
             for (f in files) {
                 try {
@@ -222,7 +233,7 @@ object SessionData {
                                                 userMessages = 0, assistantMessages = 0, requests = 0,
                                                 toolCalls = 0, retries = 0, input = 0, output = 0, reasoning = 0,
                                                 cache = 0, tools = HashMap(), models = HashMap(),
-                                                inputs = mutableListOf(),
+                                                inputs = mutableListOf(), fromTui = fromTui,
                                             )
                                         }
                                         "session/title" -> parsed?.let {
@@ -311,7 +322,7 @@ object SessionData {
         toolCalls = p.toolCalls, inputTokens = p.input, outputTokens = p.output,
         reasoningTokens = p.reasoning, cacheTokens = p.cache,
         durationMs = (p.lastAt - p.createdAt).coerceAtLeast(0), retries = p.retries,
-        subagent = p.subagent, model = p.model,
+        subagent = p.subagent, model = p.model, fromTui = p.fromTui,
     )
 
     fun dshList(ctx: Context): List<AgentSession> =
