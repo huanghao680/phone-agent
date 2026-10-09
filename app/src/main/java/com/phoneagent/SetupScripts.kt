@@ -115,11 +115,17 @@ exec "${'$'}NODE" "${'$'}USR/lib/node_modules/zcode-app-cli/bin/zcode.js" ${'$'}
     /** Interactive dsh TUI bootstrap (Installs then exec's the dsh TUI). */
     fun dshTuiScript(ctx: Context): File {
         val usr = NodeRuntime.usrDir(ctx).absolutePath
+        // the key rides the environment like the web service path does; the
+        // script text keeps it single-quoted so shell metacharacters in keys
+        // cannot break out
+        val key = SecretStore.deepseekKey(ctx).replace("'", "'\\''")
         val body = """
 #!/system/bin/sh
 # Phone-Agent: bootstrap then launch the dsh TUI.
 USR='$usr'
 PKG='${NodeRuntime.pkgDir(ctx).absolutePath}'
+DEEPSEEK_API_KEY='$key'
+export DEEPSEEK_API_KEY
 NODE="${'$'}USR/bin/node"
 NPMCLI="${'$'}USR/lib/node_modules/npm/bin/npm-cli.js"
 NODE_PATH="${'$'}USR/lib/node_modules"
@@ -170,23 +176,28 @@ if [ ! -f "${'$'}USR/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" ]; then
   exec /system/bin/sh
 fi
 
-# dsh 0.2.0 has NO terminal surface (verified: only web/headless/sdk/acp bundles
-# ship a cordis.patch.yml; the old --profile tui of 0.1.x is gone with its
-# ink-based UI). The interactive surface is the Web UI — the "DeepSeek Harness"
-# launcher icon. This card gives a working dsh CLI shell against the tui profile
-# for headless/one-shot commands; `dsh headless "task"` answers and exits.
-TUI_PROFILE="${'$'}HOME/.dsh/profiles/tui"
-if [ ! -f "${'$'}TUI_PROFILE/package.json" ]; then
-  echo "[phone-agent] 创建 dsh tui profile …"
-  mkdir -p "${'$'}TUI_PROFILE"
-  printf '%s\n' '{' '  "name": "dsh-profile-tui",' '  "private": true,' '  "dependencies": {},' '  "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base"] } }' '}' > "${'$'}TUI_PROFILE/package.json"
+# dsh 0.2.0 has no built-in terminal surface, but @deepseek-harness-tui/dsh-tui
+# (4.2k stars, primary target dsh 0.2.0-rc.2) provides one. It is a standalone
+# launcher with its OWN profile ("dsh-tui") — it bootstraps that profile itself
+# on first run and refuses nothing else. Our "tui" profile experiments are not
+# involved; the launcher binary is the entry point.
+TUI_BIN="${'$'}HOME/.dsh/profiles/dsh-tui/node_modules/@deepseek-harness-tui/dsh-tui/bin/dsh-tui.js"
+if [ ! -f "${'$'}TUI_BIN" ]; then
+  echo "[phone-agent] 安装 dsh-tui（首次，自举独立 profile，约 1-2 分钟）…"
+  mkdir -p "${'$'}HOME/.dsh/profiles/dsh-tui"
+  printf '%s\n' '{' '  "name": "dsh-profile-dsh-tui",' '  "private": true,' '  "dependencies": { "@deepseek-harness-tui/dsh-tui": "0.13.0" },' '  "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-harness-tui/dsh-tui"] } }' '}' > "${'$'}HOME/.dsh/profiles/dsh-tui/package.json"
+  # resolve inside the profile dir so pnpm lays out node_modules there
+  cd "${'$'}HOME/.dsh/profiles/dsh-tui" || exit 1
+  "${'$'}USR/bin/pnpm" install 2>&1 | tail -3
 fi
 
-echo "[phone-agent] dsh 0.2.x 没有终端交互界面（官方只剩 web/headless/sdk/acp 表面）。"
-echo "[phone-agent] 交互对话请用桌面上的「DeepSeek Harness」图标（Web UI）。"
-echo "[phone-agent] 这里可以跑 CLI：dsh headless \"任务\" 一次性执行；dsh plugin --profile tui add <插件> 装插件。"
-echo
-exec /system/bin/sh
+# DSH_TUI_SESSION_ROOT isolates its session store: dsh-tui writes plain .jsonl
+# while web/migrated sessions in the shared dir are zstd-framed, and mixed
+# formats abort its startup.
+export DSH_TUI_SESSION_ROOT="${'$'}HOME/.dsh/sessions-tui"
+mkdir -p "${'$'}DSH_TUI_SESSION_ROOT"
+echo "[phone-agent] 启动 dsh-tui（交互 TUI；首次会走四步引导向导）…"
+exec "${'$'}NODE" --expose-internals "${'$'}TUI_BIN"
 """.trim() + "\n"
         return write(ctx, "run-dsh-tui.sh", body)
     }
