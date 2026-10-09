@@ -225,6 +225,7 @@ if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
   cd "${'$'}WORKDIR"
 fi
 
+${workbuddyEnvSnippet()}
 # PATH includes the bundled ripgrep/sandbox companions; --no-daemon because the
 # bare extraction is not a complete npm package layout
 export PATH="${'$'}PKG/vendor/aarch64-unknown-linux-musl/codex-path:${'$'}PATH"
@@ -232,6 +233,39 @@ exec "${'$'}BIN" --no-daemon --dangerously-bypass-approvals-and-sandbox
 """.trim() + "\n"
         return write(ctx, "run-codex.sh", body)
     }
+
+    /**
+     * Exports the LAN OpenAI/Anthropic-compatible provider credentials when the
+     * user has dropped them into the app home. The token lives in a device-local
+     * file (never in the repo or assets), and reading it here keeps it out of the
+     * CLI's own config files.
+     */
+    private fun workbuddyEnvSnippet(): String = """
+# Optional LAN provider (workbuddy2api). ~/.workbuddy-key holds the token;
+# endpoints and model live in ~/.codex/config.toml and ~/.claude/settings.json,
+# so the CLIs keep their own config and only the token has to reach the process.
+if [ -f "${'$'}HOME/.workbuddy-key" ]; then
+  WORKBUDDY_API_KEY=$(cat "${'$'}HOME/.workbuddy-key")
+  export WORKBUDDY_API_KEY
+  ANTHROPIC_AUTH_TOKEN="${'$'}WORKBUDDY_API_KEY"
+  export ANTHROPIC_AUTH_TOKEN
+fi
+# resolve the Claude-side endpoint/model through node (the bundled one, no jq here)
+if [ -f "${'$'}HOME/.claude/settings.json" ] && [ -x "${'$'}USR/bin/node" ]; then
+  CLAUDE_ENV=$("${'$'}USR/bin/node" -e '
+const fs=require("node:fs");
+try{
+  const s=JSON.parse(fs.readFileSync(process.env.HOME+"/.claude/settings.json","utf8")).env||{};
+  for(const k of ["ANTHROPIC_BASE_URL","ANTHROPIC_MODEL","ANTHROPIC_SMALL_FAST_MODEL","ANTHROPIC_MAX_TOKENS"]){
+    if(s[k]) console.log(k+"="+s[k]);
+  }
+}catch(e){}
+')
+  for line in ${'$'}CLAUDE_ENV; do
+    export "${'$'}line"
+  done
+fi
+"""
 
     /** Interactive claude TUI bootstrap (launches via the bundled musl loader). */
     fun claudeScript(ctx: Context): File {
@@ -258,6 +292,7 @@ if [ -n "${'$'}WORKDIR" ] && [ -d "${'$'}WORKDIR" ]; then
 fi
 
 export HOME="${'$'}{HOME:-${'$'}USR/../home}"
+${workbuddyEnvSnippet()}
 exec "${'$'}LOADER" "${'$'}BIN"
 """.trim() + "\n"
         return write(ctx, "run-claude.sh", body)
