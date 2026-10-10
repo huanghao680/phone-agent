@@ -285,7 +285,7 @@ class SettingsActivity : ComponentActivity() {
                     }
                 }
 
-                item { GroupTitle("第三方模型（Codex / Claude Code）") }
+                item { GroupTitle("第三方模型（Codex / Claude / opencode）") }
                 item {
                     Card {
                         Column(Modifier.padding(16.dp)) {
