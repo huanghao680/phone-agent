@@ -285,6 +285,90 @@ class SettingsActivity : ComponentActivity() {
                     }
                 }
 
+                item { GroupTitle("第三方模型（Codex / Claude Code）") }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp)) {
+                            var enabled by remember { mutableStateOf(Prefs.lanProviderEnabled(this@SettingsActivity)) }
+                            var base by remember { mutableStateOf(Prefs.lanProviderBaseUrl(this@SettingsActivity)) }
+                            var model by remember { mutableStateOf(Prefs.lanProviderModel(this@SettingsActivity)) }
+                            var maxTokens by remember { mutableStateOf(Prefs.lanProviderMaxTokens(this@SettingsActivity).toString()) }
+                            var token by remember { mutableStateOf(LanProvider.token(this@SettingsActivity)) }
+                            var status by remember { mutableStateOf("") }
+
+                            M3Text(
+                                "把 Codex CLI、Claude Code 与 opencode 指向局域网自建网关（如 workbuddy2api）：Codex 用 OpenAI Responses、Claude 用 Anthropic Messages、opencode 用 OpenAI Chat Completions；zcode 与 dsh 沿用各自官方登录（zcode 已内建 hy4-preview）。",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 13.sp,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            UpdateRow(if (enabled) "第三方模型接入：开" else "第三方模型接入：关", enabled = true) {
+                                enabled = !enabled
+                                Prefs.setLanProviderEnabled(this@SettingsActivity, enabled)
+                                LanProvider.apply(this@SettingsActivity)
+                                status = if (enabled) "已写入 codex / claude / opencode 三份配置" else "已清除接入配置"
+                            }
+
+                            if (enabled) {
+                                Spacer(Modifier.height(10.dp))
+                                FieldLabel("网关 Base URL（如 http://192.168.1.197:3002）")
+                                TextField(
+                                    value = androidx.compose.ui.text.input.TextFieldValue(base),
+                                    onValueChange = { base = it.text },
+                                    label = "http://192.168.1.197:3002",
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                FieldLabel("模型 ID（网关侧名称）")
+                                TextField(
+                                    value = androidx.compose.ui.text.input.TextFieldValue(model),
+                                    onValueChange = { model = it.text },
+                                    label = "cn:hy4-preview",
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                FieldLabel("最大输出 tokens（推理模型建议 ≥8192）")
+                                TextField(
+                                    value = androidx.compose.ui.text.input.TextFieldValue(maxTokens),
+                                    onValueChange = { maxTokens = it.text.filter(Char::isDigit) },
+                                    label = "8192",
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                FieldLabel("网关 Token（仅存本机，不随仓库分发）")
+                                TextField(
+                                    value = androidx.compose.ui.text.input.TextFieldValue(token),
+                                    onValueChange = { token = it.text },
+                                    label = "token",
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                UpdateRow("保存并应用", enabled = base.isNotBlank()) {
+                                    Prefs.setLanProviderBaseUrl(this@SettingsActivity, base)
+                                    Prefs.setLanProviderModel(this@SettingsActivity, model)
+                                    maxTokens.toIntOrNull()?.let { Prefs.setLanProviderMaxTokens(this@SettingsActivity, it) }
+                                    LanProvider.setToken(this@SettingsActivity, token)
+                                    LanProvider.apply(this@SettingsActivity)
+                                    status = "已应用：" + Prefs.lanProviderBaseUrl(this@SettingsActivity) + " · " + Prefs.lanProviderModel(this@SettingsActivity)
+                                }
+                            }
+
+                            if (status.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                M3Text(
+                                    status,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item { GroupTitle("引擎保活与诊断") }
                 item {
                     Card {
