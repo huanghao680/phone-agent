@@ -1,6 +1,9 @@
 # Phone-Agent 交接文档
 
 > 最后更新：2026-10-11 · 当前版本 v0.8.9（versionCode 126）· CI 绿 · 仓库 github.com/huanghao680/phone-agent（main）
+>
+> **v0.8.9 两台真机回归均已完成**：clover（root——a11y ref 三端点、⇄切换器往返、NUL 自愈投毒实测、会话→TUI、release 签名构建实测、Codex+Claude 网关真实对话闭环）+ vivo（无 root——0.8.9 装机、三 web 引擎 200/401/200、zcode TUI 与 dsh-tui 四步引导渲染、**Shizuku 全路径端点 /ports /ui-dump /screenshot /shell**、a11y ref 点击、会话→TUI 实测；⇄ 切换器未在 vivo 复测——横屏 LazyColumn 导航不稳，该项已在 clover 闭环）。
+> **vivo 踩到的真雷（教训再次验证「装新设备一律用 CI 产物」）**：vivo 装的是**本地构建 126**（无 CI staging 资产），且这台从未打开过 zcode web → `files/zcode-server`、`zcode-web` 缺失，zcode web 无限重启「服务端缺失」；dsh-tui profile 也从未自举（够不到 npm registry）→ TUI 报 Cannot find module。本轮经 **clover→PC→vivo 的 USB tar 搬运**救活（zcode-web 资产 52MB 包 + dsh-tui profile + 会话样本；当时代理只有 ~44KB/s，500MB CI 包下不动——**换网络直装 CI 产物才是正路，首启自举会自然补齐**）。另记：`opencode run`（CLI 非交互）在 clover 上挂于 models.dev 抓取（见 roadmap 2 登记），与本雷无关。**vivo 现跑 = 本地构建代码 + 移植资产**，纯净 CI 首启验证仍欠一次。无障碍边界：原生 Compose 字段 set/get 往返可靠，**WebView 内字段抓不全**（长文本截断、text=null）。
 
 本文档面向接手继续开发的开发者。读完这一篇 + `README.md`，你应当能独立完成构建、发布和继续迭代。
 
@@ -158,7 +161,7 @@ Token 存 `~/.workbuddy-key`（600），由 `SetupScripts.workbuddyEnvSnippet()`
    - Claude 拒绝以 root 跑 `--dangerously-skip-permissions`（"cannot be used with root/sudo"）——复核脚本必须以 **app uid** 执行（工具通道 /shell 正好是 app uid，天然合适）；
    - `~/.workbuddy-key` 与 `~/.codex/config.toml` 在 clover 上出现**全 NUL 字节损坏**（长度正常、内容 0x00——写入未落盘的老崩溃残留），Codex 报 `config.toml:1:197: key with no value` 拒启。**0.8.9 加了冷启动自愈 `LanProvider.healCorrupted`**：文本格式文件里出现任何 NUL 即移为 `*.nul-corrupt`，CLI 回到干净默认态（token() 也防御性读空）。
    - **未决：`opencode run`（非交互 CLI）挂起**——日志停在 `Failed to fetch models.dev cause=TimeoutError` 后无限等待；`--pure`、显式 `--model`、`OPENCODE_DISABLE_MODELS_FETCH`、DNS 代理在/不在均如此。**App 的两个发布面不受影响**：`opencode serve`（web 4096 正常）和裸 `opencode` TUI。这是 opencode CLI 自身在 Bun+Android 上的问题，非网关配置错误；若要支持 agent 会话里跑 `opencode run`，需继续查（候选：strace 看它 timeout 后卡在哪个 syscall）。
-3. **附件桥在 dsh 的落地**：等 dsh web 预览版出附件按钮（桥已就绪）
+3. **附件桥在 dsh 的落地**：**上游已就位（本轮 vivo 实测发现）**——dsh web（0.2.0-rc.2）插件清单已含 `dsh-client-ui-attachment` + `dsh-client-file-upload`，界面上有「添加文件或调用指令」按钮；桥侧 `AttachmentBridge.attach` 本就挂在 DshActivity 的 WebView 上。**未闭环**：经 a11y ref 点击与坐标点击该按钮都没唤起系统文件选择器（疑似组合菜单需二次交互，或 WebView onShowFileChooser 未被触发）——下轮先人工点一次定性，再判定是桥的缺陷还是上游交互形态
 4. ~~无障碍通道扩展~~ **✅ 0.8.9**：`/a11y-click?ref=@eN&long=true`（ref 级点击，不可点时爬祖先 3 层，跨应用可用）、`/a11y-set-text?ref=@eN&text=...`（**CJK 安全写入输入框**——绕开 `input text` 不支持非 ASCII 和和弦粘贴不可靠两大坑）、`/a11y-text?ref=@eN`（读回字段实值，落实「别信 rc」）。refs 每次 dump 后刷新
 5. ~~多会话 UI~~ **✅ 0.8.9**：终端宿主右上角 **⇄ 切换器**（跨 node/binary 会话列出全部活跃 TUI 一键跳转）；ZcodeTerminalActivity 补了 `onNewIntent`（singleTask 下选择器/切换器换 agent 不再被吞）
 6. **armv7 / x86_64**：0.8.9 加了不支持 ABI 的**明确警告横幅**（选择器顶部，非 arm64-v8a 直接说明）；完整支持是资产管线大工程——fetch-runtime/fetch-native/fetch-terminal-extra 产出的 node 快照、node-pty prebuild、Bun ELF、codex/claude 二进制全部 arm64-only，每 ABI 都要重建 + 装包验证。按用户需求排期
