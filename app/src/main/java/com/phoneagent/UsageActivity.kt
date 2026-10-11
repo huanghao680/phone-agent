@@ -277,6 +277,17 @@ class UsageActivity : ComponentActivity() {
                                     Spacer(Modifier.height(4.dp))
                                     M3Text(s.model, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 11.sp)
                                 }
+                                Spacer(Modifier.height(8.dp))
+                                Row {
+                                    TextButton(onClick = { openTui(agent) }) {
+                                        M3Text(
+                                            "⌨ 打开对应 TUI" + if (s.fromTui) "（会话来源）" else "",
+                                            color = Color(0xFF7CC4FF),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -403,6 +414,24 @@ class UsageActivity : ComponentActivity() {
                     }
                 }
                 item {
+                    Card(Modifier.fillMaxSize().clickable { openTui(agent) }) {
+                        Column(Modifier.padding(16.dp)) {
+                            M3Text(
+                                "⌨ 打开对应 TUI",
+                                color = Color(0xFF7CC4FF),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            M3Text(
+                                if (d.session.fromTui) "该会话由终端 TUI 写入——TUI 会回到它的会话列表" else "启动该 agent 的终端 TUI（TUI 自行恢复最近会话）",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
+                }
+                item {
                     Card(Modifier.fillMaxSize().clickable { showMigrate = true }) {
                         Column(Modifier.padding(16.dp)) {
                             M3Text(
@@ -507,6 +536,17 @@ class UsageActivity : ComponentActivity() {
                 dismissButton = { TextButton(onClick = { confirmDelete = false }) { M3Text("取消") } },
             )
         }
+    }
+
+    /** Opens the agent's terminal TUI — same mapping the terminal picker uses. */
+    private fun openTui(agent: String) {
+        val intent = when (agent) {
+            "zcode" -> android.content.Intent(this, ZcodeTerminalActivity::class.java).putExtra("agent", "zcode")
+            "dsh" -> android.content.Intent(this, ZcodeTerminalActivity::class.java).putExtra("agent", "dsh")
+            "opencode" -> android.content.Intent(this, OpencodeTerminalActivity::class.java)
+            else -> return
+        }
+        startActivity(intent)
     }
 
     private fun doMigrate(from: String, id: String, to: String) {
