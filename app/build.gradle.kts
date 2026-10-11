@@ -15,12 +15,18 @@ android {
         // storage when targetSdk >= 29 (W^X), and the embedded Node runtime must be
         // executable from filesDir. Same tradeoff Termux makes. Not distributed via Play.
         targetSdk = 28
-        versionCode = 125
-        versionName = "0.8.8"
+        versionCode = 126
+        versionName = "0.8.9"
         ndk {
             abiFilters += "arm64-v8a"
         }
     }
+
+    // Release keystore: present when PA_RELEASE_STORE points at it (local
+    // builds) or the CI secrets decoded it. Absent -> release falls back to
+    // debug signing so CI keeps producing installable APKs.
+    val releaseStoreFile = System.getenv("PA_RELEASE_STORE")?.let { rootProject.file(it) }
+    val releaseSigning = if (releaseStoreFile?.isFile == true) "release" else "debug"
 
     signingConfigs {
         getByName("debug") {
@@ -31,6 +37,14 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        if (releaseStoreFile?.isFile == true) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = System.getenv("PA_RELEASE_STORE_PASS")
+                keyAlias = System.getenv("PA_RELEASE_KEY_ALIAS") ?: "phone-agent"
+                keyPassword = System.getenv("PA_RELEASE_KEY_PASS")
+            }
+        }
     }
 
     buildTypes {
@@ -39,6 +53,7 @@ android {
         }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName(releaseSigning)
         }
     }
 
@@ -60,6 +75,13 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+    }
+
+    lint {
+        // ExpiredTargetSdkVersion is deliberate: targetSdk 28 is required for the
+        // W^X exemption (see defaultConfig) and this app is not distributed via
+        // Google Play. The release build would otherwise refuse to assemble.
+        disable += "ExpiredTargetSdkVersion"
     }
 }
 

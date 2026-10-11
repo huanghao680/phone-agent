@@ -21,3 +21,6 @@ captures/
 dist*/
 local.properties
 research/
+# release signing: keystore + its password stay local only (CI reads secrets)
+release.keystore
+release-key.pass

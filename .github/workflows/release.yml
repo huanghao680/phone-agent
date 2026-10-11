@@ -13,6 +13,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Decode release keystore (optional secrets)
+        env:
+          PA_KS_BASE64: ${{ secrets.PA_KS_BASE64 }}
+          PA_KS_PASS: ${{ secrets.PA_KS_PASS }}
+          PA_KEY_PASS: ${{ secrets.PA_KEY_PASS }}
+        run: |
+          if [ -n "$PA_KS_BASE64" ]; then
+            echo "$PA_KS_BASE64" | base64 -d > release.keystore
+            echo "PA_RELEASE_STORE=release.keystore" >> "$GITHUB_ENV"
+            echo "PA_RELEASE_STORE_PASS=$PA_KS_PASS" >> "$GITHUB_ENV"
+            echo "PA_RELEASE_KEY_ALIAS=phone-agent" >> "$GITHUB_ENV"
+            echo "PA_RELEASE_KEY_PASS=$PA_KEY_PASS" >> "$GITHUB_ENV"
+          else
+            echo "no PA_KS_BASE64 secret — release APK falls back to debug signing"
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
