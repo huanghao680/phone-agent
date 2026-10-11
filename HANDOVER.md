@@ -41,7 +41,9 @@ C:/Users/HH0113/.gradle/wrapper/dists/gradle-9.6.1-all/ea0s6ybcs323rkwxzj29dsh0/
 
 ### 发布
 
-push tag `v*` 触发 `.github/workflows/release.yml` → 构建并挂 GitHub Release（需要 `permissions: contents: write`，已配好）。首个正式 release：v0.7.94。
+push tag `v*` 触发 `.github/workflows/release.yml` → **构建 release 签名 APK**（`assembleRelease`）并挂 GitHub Release（需要 `permissions: contents: write`，已配好）。历史 release 全是 debug 签名（旧工作流跑的是 `assembleDebug`，`daaaa9d` 起才是 release 签名）；**v0.8.9 是首个 release 签名版**：证书 `CN=Phone Agent`，SHA-256 指纹 `324b81c77bc1b5e84f3906dde7bb28250be215c20a83cca55129c0d51d226976`——CI 与本地 `release.keystore` 双向核对一致。
+
+**签名 secrets 已配置**（仓库 Settings→Secrets）：`PA_KS_BASE64`（keystore base64）、`PA_KS_PASS`、`PA_KEY_PASS`；本地原件 `release.keystore` + `release-key.pass`（均 gitignored）**必须异地备份，丢了 = 后续版本全部换签名 = 老用户全量重装**。debug 签名旧包直接覆盖装 release 签名新包会被系统拒装（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`），**发布说明里要提醒先卸载**（v0.8.9 的 Release 说明已加）。
 
 ### CI
 
@@ -165,7 +167,7 @@ Token 存 `~/.workbuddy-key`（600），由 `SetupScripts.workbuddyEnvSnippet()`
 4. ~~无障碍通道扩展~~ **✅ 0.8.9**：`/a11y-click?ref=@eN&long=true`（ref 级点击，不可点时爬祖先 3 层，跨应用可用）、`/a11y-set-text?ref=@eN&text=...`（**CJK 安全写入输入框**——绕开 `input text` 不支持非 ASCII 和和弦粘贴不可靠两大坑）、`/a11y-text?ref=@eN`（读回字段实值，落实「别信 rc」）。refs 每次 dump 后刷新
 5. ~~多会话 UI~~ **✅ 0.8.9**：终端宿主右上角 **⇄ 切换器**（跨 node/binary 会话列出全部活跃 TUI 一键跳转）；ZcodeTerminalActivity 补了 `onNewIntent`（singleTask 下选择器/切换器换 agent 不再被吞）
 6. **armv7 / x86_64**：0.8.9 加了不支持 ABI 的**明确警告横幅**（选择器顶部，非 arm64-v8a 直接说明）；完整支持是资产管线大工程——fetch-runtime/fetch-native/fetch-terminal-extra 产出的 node 快照、node-pty prebuild、Bun ELF、codex/claude 二进制全部 arm64-only，每 ABI 都要重建 + 装包验证。按用户需求排期
-7. ~~release 签名~~ **✅ 0.8.9**：gradle 读 `PA_RELEASE_STORE / PA_RELEASE_STORE_PASS / PA_RELEASE_KEY_ALIAS / PA_RELEASE_KEY_PASS`，keystore 在场则 release 签名，否则回退 debug（CI 无密钥也能构建）；release.yml 增加解码 secrets 步骤（`PA_KS_BASE64 / PA_KS_PASS / PA_KEY_PASS`）。本地 keystore 在 `release.keystore`（gitignored，别名 phone-agent，密码在 `release-key.pass`）——**换成正式签名后旧 debug 签名的 release 无法原地升级，全新安装即可**
+7. ~~release 签名~~ **✅ 0.8.9 全链路完成**：gradle 读 `PA_RELEASE_STORE / PA_RELEASE_STORE_PASS / PA_RELEASE_KEY_ALIAS / PA_RELEASE_KEY_PASS`，keystore 在场则 release 签名，否则回退 debug（CI 无密钥也能构建）；release.yml 解码 secrets（`PA_KS_BASE64 / PA_KS_PASS / PA_KEY_PASS`，**三条均已配置**，`gh secret list` 可查）。修掉一个潜伏漏洞：release.yml 原来跑 `assembleDebug`，secrets 配了也走不到 release 签名路径，现改 `assembleRelease` + `apksigner verify` 打指纹进日志。**v0.8.9 已发布为首个 release 签名版**（证书 `CN=Phone Agent`，SHA-256 见 §2 发布节，CI 与本地双向核对一致）。本地 keystore 在 `release.keystore`（gitignored，别名 phone-agent，密码在 `release-key.pass`）——**必须异地备份**；debug 签名旧包无法覆盖装 release 签名包（实测 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`），Release 说明已提示先卸载
 
 ## 8. 关键设计决策（勿轻易推翻）
 
