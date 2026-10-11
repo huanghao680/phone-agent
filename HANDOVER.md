@@ -43,7 +43,14 @@ C:/Users/HH0113/.gradle/wrapper/dists/gradle-9.6.1-all/ea0s6ybcs323rkwxzj29dsh0/
 
 push tag `v*` 触发 `.github/workflows/release.yml` → **构建 release 签名 APK**（`assembleRelease`）并挂 GitHub Release（需要 `permissions: contents: write`，已配好）。历史 release 全是 debug 签名（旧工作流跑的是 `assembleDebug`，`daaaa9d` 起才是 release 签名）；**v0.8.9 是首个 release 签名版**：证书 `CN=Phone Agent`，SHA-256 指纹 `324b81c77bc1b5e84f3906dde7bb28250be215c20a83cca55129c0d51d226976`——CI 与本地 `release.keystore` 双向核对一致。
 
-**签名 secrets 已配置**（仓库 Settings→Secrets）：`PA_KS_BASE64`（keystore base64）、`PA_KS_PASS`、`PA_KEY_PASS`；本地原件 `release.keystore` + `release-key.pass`（均 gitignored）**必须异地备份，丢了 = 后续版本全部换签名 = 老用户全量重装**。**异地备份已落地（2026-10-11）**：fnOS NAS `admin@/vol2/1000/backup-phone-agent/`（bundle 全历史+tags、解包裸仓库 `phone-agent.git/`、两把密钥、SHA256SUMS.txt），日常增量跑 `scripts/backup-nas.ps1`（需 fnos skill 的 trim-cli 登录 profile home；NAS 若装 git 服务可直接 `git clone /vol2/1000/backup-phone-agent/phone-agent.git`，bundle 也可随时 `git clone`）。debug 签名旧包直接覆盖装 release 签名包会被系统拒装（实测 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`），**发布说明里要提醒先卸载**（v0.8.9 的 Release 说明已加）。
+**签名 secrets 已配置**（仓库 Settings→Secrets）：`PA_KS_BASE64`（keystore base64）、`PA_KS_PASS`、`PA_KEY_PASS`；本地原件 `release.keystore` + `release-key.pass`（均 gitignored）**必须异地备份，丢了 = 后续版本全部换签名 = 老用户全量重装**。**异地备份已落地（2026-10-11）**：fnOS NAS `admin@/vol2/1000/backup-phone-agent/`，内容为
+`phone-agent-main.bundle`（全历史+tags）、`phone-agent.git/`（解好的裸仓库，装了 git 可直接 clone）、`phone-agent-bundle.tar.gz`（**完整性证明用的 gzip 副本**）、`phone-agent-git.tar.gz`、`release.keystore` + `release-key.pass`、`SHA256SUMS.txt`（锚点清单）。
+
+日常增量：`scripts/backup-nas.ps1`（需 fnos skill 的 trim-cli 登录 profile home）。
+**两个必须知道的坑**（都已写进脚本注释和清单头部）：
+1. **git bundle 不是字节可复现的**——同一提交连打两次字节数都不同（实测 621209 / 614591），所以**绝不能跨次比大小或哈希**当校验。要验就用 `git bundle verify` + `git clone <bundle>` 看 HEAD。
+2. 因此传输完整性改用另一条真证明：脚本把 bundle 再打进 `.tar.gz` 上传，然后**在 NAS 侧解压**（gzip CRC 端到端校验），解出的字节数与本地比对——解压成功即证明上传字节无损。SHA256SUMS.txt 里只锚定 commit hash 与两个静态密钥文件的哈希。
+另注：NAS 的 SSH 只接受密码认证（无免密密钥）、SMB 需凭据、`file download-url` 被 CLI 打码且无服务端哈希接口——所以**"把 NAS 上那份拉回来逐字节验"这条路当前走不通**，上述 gzip 解压法是现有条件下最强的证明。debug 签名旧包直接覆盖装 release 签名包会被系统拒装（实测 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`），**发布说明里要提醒先卸载**（v0.8.9 的 Release 说明已加）。
 
 ### CI
 
