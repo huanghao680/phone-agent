@@ -87,6 +87,7 @@ class TerminalPickerActivity : ComponentActivity() {
         val claudeAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.CLAUDE) }
         val opencodeAvailable = remember(binReadyTick) { BinaryAgents.isReady(this, BinaryAgents.OPENCODE) }
         // choices come from the registry; availability is the only local input
+        val abiOk = remember { android.os.Build.SUPPORTED_ABIS.contains("arm64-v8a") }
         val choices = AgentRegistry.terminal().map { a ->
             val ready = if (a.needsAsset) BinaryAgents.isReady(this, a.id) else true
             Choice(
@@ -105,6 +106,29 @@ class TerminalPickerActivity : ComponentActivity() {
             ) {
                 item {
                     SectionTitle("选择要运行的 TUI")
+                }
+                if (!abiOk) {
+                    // the staged runtime (node snapshot, node-pty, bun/codex/claude
+                    // binaries) is arm64-only; on anything else say so instead of a
+                    // mysterious "二进制缺失" after the cards load
+                    item {
+                        Card(Modifier.fillMaxSize()) {
+                            Column(Modifier.padding(16.dp)) {
+                                M3Text(
+                                    "⚠ 本机 ABI 不受支持（${android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "?"}）",
+                                    color = Color(0xFFF87171),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                M3Text(
+                                    "内嵌运行时与 CLI 二进制仅覆盖 arm64-v8a；armv7 / x86_64 支持需要为每 ABI 重建资产管线，见交接文档 roadmap。",
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
                 }
                 items(choices, key = { it.id }) { c ->
                     Card(
