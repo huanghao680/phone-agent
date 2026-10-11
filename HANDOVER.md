@@ -1,6 +1,6 @@
 # Phone-Agent 交接文档
 
-> 最后更新：2026-10-11 · 当前版本 v0.8.8（versionCode 125）· CI 绿 · 仓库 github.com/huanghao680/phone-agent（main）
+> 最后更新：2026-10-11 · 当前版本 v0.8.9（versionCode 126）· CI 绿 · 仓库 github.com/huanghao680/phone-agent（main）
 
 本文档面向接手继续开发的开发者。读完这一篇 + `README.md`，你应当能独立完成构建、发布和继续迭代。
 
@@ -75,7 +75,7 @@ vivo 特性（踩过的坑）：adb install 弹确认框 **17 秒超时自动拒
 - `Watchdog.kt` — 四态探活保活（HEALTHY/DEGRADED_HTTP/DEGRADED_LOG/DEAD），5s 一拍 + 指数退避 + 熔断；**阶段打点在 `dsh-boot` logcat tag**
 - `WatchdogTargets.kt` — 从 AgentRegistry 生成探活目标
 - `EngineState.kt` + `BootReceiver.kt` — 开机恢复（默认关，设置页开关）
-- `PhoneToolService.kt` — **127.0.0.1:8899 工具通道**（agent 用 bash/curl 调用）：/screenshot /ui-dump /a11y-dump /browser-* /tap /input /key /shell /clipboard /ports /device /vdisplay-*。**/usr/bin/pa-* wrapper** 让 agent 免记端点
+- `PhoneToolService.kt` — **127.0.0.1:8899 工具通道**（agent 用 bash/curl 调用）：/screenshot /ui-dump /a11y-dump /a11y-click /a11y-set-text /a11y-text /browser-* /tap /input /key /shell /clipboard /ports /device /vdisplay-*。**/usr/bin/pa-* wrapper** 让 agent 免记端点
 
 ### 会话管理
 - `SessionData.kt` — 三家数据源统一读取（zcode SQLite / dsh jsonl.zstd 双根含 sessions-tui / opencode SQLite）；`AgentSession.fromTui` 标终端来源
@@ -88,7 +88,7 @@ vivo 特性（踩过的坑）：adb install 弹确认框 **17 秒超时自动拒
 - `FileIncomingActivity.kt` — 分享/打开方式直达会话（files/incoming 临时工作区，7 天 TTL）
 - `AttachmentBridge.kt` — WebView 文件选择器（三个 web Activity + 浏览器工作台共用）
 - `BrowserWorkbenchActivity.kt` — agent 用的隔离浏览器（/browser-open|snapshot|close，含 console 遥测）
-- `A11yService.kt` — 无障碍语义树（/a11y-dump 的 ref+diff 模式，借 agent-device 设计）
+- `A11yService.kt` — 无障碍语义树（/a11y-dump 的 ref+diff 模式，借 agent-device 设计；0.8.9 加 `clickByRef`（不可点时自动爬祖先 3 层）/ `setTextByRef`（CJK 安全写入，绕开 `input text` 不支持非 ASCII）/ `textByRef`（读字段实值，落实"别信 rc"）；`lastNodes` 每次 dump 重建）
 - `DiagActivity.kt` — 诊断页（看门狗状态 + 端口表 + 日志尾部）
 - `ApkUpdate.kt` — APK 手动更新检查（GitHub latest）
 - `LanProvider.kt` — **第三方网关写入器**（见 §5）
@@ -153,13 +153,16 @@ Token 存 `~/.workbuddy-key`（600），由 `SetupScripts.workbuddyEnvSnippet()`
 
 ## 7. Roadmap（按优先级）
 
-1. **TUI 会话管理深化**：现在列表能看到 TUI 会话（fromTui 徽标），可以加「打开对应 TUI」跳转
-2. **Claude Code 真实对话复核**：hy4-preview 是推理模型，MAX_TOKENS=8192 已配；502 偶发来自 workbuddy 上游，若持续需看网关日志
+1. ~~TUI 会话管理深化~~ **✅ 0.8.9**：会话列表每张卡加「⌨ 打开对应 TUI」按钮、详情页加同款卡片（zcode/dsh→共享 PTY 宿主，opencode→独立宿主；映射与终端选择器一致）
+2. **Claude Code 真实对话复核**：**✅ 0.8.9 复核完成（clover）**——Codex `exec`（responses 通道，RC=0，答"1+1 等于 2"）与 Claude `-p`（messages 通道，RC=0）经 workbuddy 网关真实对话全部通过。三个实测发现：
+   - Claude 拒绝以 root 跑 `--dangerously-skip-permissions`（"cannot be used with root/sudo"）——复核脚本必须以 **app uid** 执行（工具通道 /shell 正好是 app uid，天然合适）；
+   - `~/.workbuddy-key` 与 `~/.codex/config.toml` 在 clover 上出现**全 NUL 字节损坏**（长度正常、内容 0x00——写入未落盘的老崩溃残留），Codex 报 `config.toml:1:197: key with no value` 拒启。**0.8.9 加了冷启动自愈 `LanProvider.healCorrupted`**：文本格式文件里出现任何 NUL 即移为 `*.nul-corrupt`，CLI 回到干净默认态（token() 也防御性读空）。
+   - **未决：`opencode run`（非交互 CLI）挂起**——日志停在 `Failed to fetch models.dev cause=TimeoutError` 后无限等待；`--pure`、显式 `--model`、`OPENCODE_DISABLE_MODELS_FETCH`、DNS 代理在/不在均如此。**App 的两个发布面不受影响**：`opencode serve`（web 4096 正常）和裸 `opencode` TUI。这是 opencode CLI 自身在 Bun+Android 上的问题，非网关配置错误；若要支持 agent 会话里跑 `opencode run`，需继续查（候选：strace 看它 timeout 后卡在哪个 syscall）。
 3. **附件桥在 dsh 的落地**：等 dsh web 预览版出附件按钮（桥已就绪）
-4. **无障碍通道扩展**：a11y-click（按 ref 点击，不再用坐标）、跨应用操作
-5. **多会话 UI**：终端已支持 per-agent 并存，可加会话切换器 UI
-6. **armv7 / x86_64**：用户群有需求（参考 dsh-TUI 仓库的 issue 区）
-7. **release 签名**：目前 debug 签名发 release，正式分发需配 release keystore
+4. ~~无障碍通道扩展~~ **✅ 0.8.9**：`/a11y-click?ref=@eN&long=true`（ref 级点击，不可点时爬祖先 3 层，跨应用可用）、`/a11y-set-text?ref=@eN&text=...`（**CJK 安全写入输入框**——绕开 `input text` 不支持非 ASCII 和和弦粘贴不可靠两大坑）、`/a11y-text?ref=@eN`（读回字段实值，落实「别信 rc」）。refs 每次 dump 后刷新
+5. ~~多会话 UI~~ **✅ 0.8.9**：终端宿主右上角 **⇄ 切换器**（跨 node/binary 会话列出全部活跃 TUI 一键跳转）；ZcodeTerminalActivity 补了 `onNewIntent`（singleTask 下选择器/切换器换 agent 不再被吞）
+6. **armv7 / x86_64**：0.8.9 加了不支持 ABI 的**明确警告横幅**（选择器顶部，非 arm64-v8a 直接说明）；完整支持是资产管线大工程——fetch-runtime/fetch-native/fetch-terminal-extra 产出的 node 快照、node-pty prebuild、Bun ELF、codex/claude 二进制全部 arm64-only，每 ABI 都要重建 + 装包验证。按用户需求排期
+7. ~~release 签名~~ **✅ 0.8.9**：gradle 读 `PA_RELEASE_STORE / PA_RELEASE_STORE_PASS / PA_RELEASE_KEY_ALIAS / PA_RELEASE_KEY_PASS`，keystore 在场则 release 签名，否则回退 debug（CI 无密钥也能构建）；release.yml 增加解码 secrets 步骤（`PA_KS_BASE64 / PA_KS_PASS / PA_KEY_PASS`）。本地 keystore 在 `release.keystore`（gitignored，别名 phone-agent，密码在 `release-key.pass`）——**换成正式签名后旧 debug 签名的 release 无法原地升级，全新安装即可**
 
 ## 8. 关键设计决策（勿轻易推翻）
 
