@@ -24,7 +24,12 @@ object LanProvider {
     fun keyFile(ctx: Context): File = File(NodeRuntime.homeDir(ctx), KEY_FILE)
 
     fun token(ctx: Context): String = try {
-        keyFile(ctx).readText().trim()
+        // A crash mid-write (or a reboot before the page cache flushed) can leave
+        // a file of plausible length whose body is all NUL bytes — Codex then dies
+        // with "key with no value". Treat such a key as absent so the Settings
+        // field starts clean instead of shipping an empty credential everywhere.
+        val raw = keyFile(ctx).readText()
+        if (raw.contains('\u0000')) "" else raw.trim()
     } catch (_: Exception) {
         ""
     }
@@ -127,4 +132,37 @@ object LanProvider {
     /** True when the switch is on and the gateway base URL is set. */
     fun active(ctx: Context): Boolean =
         Prefs.lanProviderEnabled(ctx) && Prefs.lanProviderBaseUrl(ctx).isNotBlank()
+
+    /**
+     * NUL-corrupted config files (size plausible, body all-zero — the classic
+     * shape of a crash before the page cache flushed, or a copy through a lossy
+     * tool) make the CLIs die at startup: Codex reports "key with no value",
+     * Claude parses garbage, and the error only surfaces when a human opens the
+     * TUI. Move such files aside at cold boot so the CLI falls back to its own
+     * defaults instead of a poison config; the user's gateway values live in
+     * Prefs (never in these files except the token, which apply() rewrites).
+     */
+    fun healCorrupted(ctx: Context) {
+        val home = NodeRuntime.homeDir(ctx)
+        val files = listOf(
+            File(home, ".codex/config.toml"),
+            File(home, ".claude/settings.json"),
+            File(home, ".config/opencode/opencode.jsonc"),
+            keyFile(ctx),
+        )
+        for (f in files) {
+            try {
+                if (!f.isFile) continue
+                val bytes = f.readBytes()
+                // These are all text formats — a legitimate file never contains a
+                // NUL byte, so one means the write never really landed (all-zero
+                // page or partial zero run); either way the CLI chokes on it.
+                if (!bytes.any { it.toInt() == 0 }) continue
+                val side = File(f.parentFile, f.name + ".nul-corrupt")
+                f.renameTo(side) || f.delete()
+                android.util.Log.w("lan-provider", "moved NUL-corrupted ${f.name} aside")
+            } catch (_: Exception) {
+            }
+        }
+    }
 }

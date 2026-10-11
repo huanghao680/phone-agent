@@ -23,6 +23,12 @@ class AgentApp : Application() {
                 FileIncomingActivity.sweepExpired(this)
             } catch (_: Exception) {
             }
+            // NUL-corrupted CLI configs poison the TUIs at launch and the error
+            // only surfaces when a human opens one — sweep them aside at boot
+            try {
+                LanProvider.healCorrupted(this)
+            } catch (_: Exception) {
+            }
             // loopback tool channel for agent sessions
             try {
                 startForegroundService(Intent(this, PhoneToolService::class.java))
