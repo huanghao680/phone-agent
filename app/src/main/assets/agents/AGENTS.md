@@ -17,6 +17,10 @@
 
 - `pa-screenshot > $TMPDIR/shot.png` —— 截取当前屏幕（PNG 到 stdout）
 - `pa-ui-dump` —— 当前界面 UI 层级树（JSON，`xml` 字段是 uiautomator dump）
+- `pa-a11y-dump` —— 语义树（只含可操作节点，带 `@eN` ref 与 bounds；**跨应用可用、不需要 Shizuku**）
+- `pa-a11y-click @eN` —— 按 ref 点击（ref 来自上一次 dump；不可点时自动爬祖先）
+- `pa-a11y-set @eN <文本>` —— 往输入框写文本，**中文等非 ASCII 也安全**（语义通道的 SET_TEXT，不依赖键盘/剪贴板）
+- `pa-a11y-text @eN` —— 读回字段实值（别信 rc，读实值验证）
 - `pa-tap <x> <y>` —— 点击绝对像素坐标（越界坐标会被拒绝）
 - `pa-input <文本>` —— 输入文本；ASCII 直接键入，**中文等非 ASCII 走剪贴板粘贴**（需先用 `pa-tap` 聚焦目标输入框）
 - `pa-key <KEYCODE>` —— 按键，如 `pa-key KEYCODE_BACK`
@@ -24,7 +28,7 @@
 - `pa-clip` 读剪贴板 / `pa-clip <文本>` 写剪贴板
 - `pa-ports` / `pa-device` —— 本机监听端口表 / 设备信息
 
-坐标一律绝对像素（屏幕原点左上）。操作前先 `pa-ui-dump` 看清界面再动手。
+坐标一律绝对像素（屏幕原点左上）。**优先用 `pa-a11y-dump` + ref 操作**（语义精准、跨应用、免 Shizuku）；uiautomator 树或坐标点击作为兜底。操作前先看清界面再动手。
 
 ## 更新政策（必须遵守）
 

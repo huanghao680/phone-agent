@@ -221,6 +221,20 @@ exec curl -s --max-time 30 "http://127.0.0.1:8899/screenshot"
             "pa-ui-dump" to """#!/system/bin/sh
 exec curl -s --max-time 30 "http://127.0.0.1:8899/ui-dump"
 """,
+            "pa-a11y-dump" to """#!/system/bin/sh
+# mode=interactive keeps only actionable nodes; diff=true returns +/-/= lines
+exec curl -s --max-time 30 "http://127.0.0.1:8899/a11y-dump?mode=interactive"
+""",
+            "pa-a11y-click" to """#!/system/bin/sh
+exec curl -s --max-time 15 -G --data-urlencode "ref=$1" "http://127.0.0.1:8899/a11y-click"
+""",
+            "pa-a11y-set" to """#!/system/bin/sh
+# CJK-safe text injection into the field a11y-dump ref'd (no IME needed)
+exec curl -s --max-time 15 -G --data-urlencode "ref=$1" --data-urlencode "text=$2" "http://127.0.0.1:8899/a11y-set-text"
+""",
+            "pa-a11y-text" to """#!/system/bin/sh
+exec curl -s --max-time 15 -G --data-urlencode "ref=$1" "http://127.0.0.1:8899/a11y-text"
+""",
             "pa-tap" to """#!/system/bin/sh
 exec curl -s --max-time 15 "http://127.0.0.1:8899/tap?x=$1&y=$2"
 """,

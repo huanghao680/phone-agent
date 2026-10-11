@@ -249,6 +249,35 @@ class PhoneToolService : Service() {
                         A11yService.instance?.resetBaseline()
                         json(mapOf("reset" to true))
                     }
+                    "/a11y-click" -> {
+                        val svc = A11yService.instance
+                        val ref = q["ref"]
+                        when {
+                            svc == null -> json(mapOf("error" to "accessibility service not enabled (系统设置-无障碍 开启 phone-agent 设备工具)"))
+                            ref == null -> argErrJson("ref")
+                            else -> json(svc.clickByRef(ref, longClick = q["long"] == "true"))
+                        }
+                    }
+                    "/a11y-set-text" -> {
+                        val svc = A11yService.instance
+                        val ref = q["ref"]
+                        val text = q["text"]
+                        when {
+                            svc == null -> json(mapOf("error" to "accessibility service not enabled (系统设置-无障碍 开启 phone-agent 设备工具)"))
+                            ref == null -> argErrJson("ref")
+                            text == null -> argErrJson("text")
+                            else -> json(svc.setTextByRef(ref, text))
+                        }
+                    }
+                    "/a11y-text" -> {
+                        val svc = A11yService.instance
+                        val ref = q["ref"]
+                        when {
+                            svc == null -> json(mapOf("error" to "accessibility service not enabled (系统设置-无障碍 开启 phone-agent 设备工具)"))
+                            ref == null -> argErrJson("ref")
+                            else -> json(svc.textByRef(ref))
+                        }
+                    }
                     "/vdisplay-list" -> json(
                         mapOf(
                             "displays" to VirtualDisplay.list(),
@@ -274,7 +303,7 @@ class PhoneToolService : Service() {
         mapOf(
             "service" to "phone-agent-tools",
             "endpoints" to listOf(
-                "/status", "/ports", "/ui-dump", "/a11y-dump", "/a11y-reset", "/browser-open", "/browser-snapshot", "/browser-close", "/screenshot", "/tap", "/input",
+                "/status", "/ports", "/ui-dump", "/a11y-dump", "/a11y-reset", "/a11y-click", "/a11y-set-text", "/a11y-text", "/browser-open", "/browser-snapshot", "/browser-close", "/screenshot", "/tap", "/input",
                 "/key", "/shell", "/clipboard", "/device",
                 "/vdisplay-create", "/vdisplay-destroy", "/vdisplay-launch", "/vdisplay-tap", "/vdisplay-list",
             ),

@@ -30,6 +30,13 @@ class A11yService : AccessibilityService() {
     /** Last emitted snapshot, keyed by ref, for diffing. */
     private var lastSnapshot: LinkedHashMap<String, String>? = null
 
+    /**
+     * Live node per ref from the last dump, so /a11y-click /a11y-set-text /
+     * a11y-text can act on what the agent just read. Entries hold the node as
+     * captured; callers refresh() before acting. Cleared on each dump.
+     */
+    private var lastNodes = LinkedHashMap<String, AccessibilityNodeInfo>()
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -41,6 +48,7 @@ class A11yService : AccessibilityService() {
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        lastNodes.clear()
         super.onDestroy()
     }
 
@@ -52,6 +60,7 @@ class A11yService : AccessibilityService() {
         val root = rootInActiveWindow
             ?: return mapOf("error" to "no active window (service enabled?)")
         val nodes = ArrayList<Map<String, Any?>>(limit)
+        lastNodes.clear()
 
         fun walk(n: AccessibilityNodeInfo?, depth: Int) {
             if (n == null || nodes.size >= limit || depth > 24) return
@@ -67,14 +76,16 @@ class A11yService : AccessibilityService() {
             val interesting = !interactive ||
                 (actionable && (label.isNotEmpty() || n.isEditable || n.viewIdResourceName != null))
             if (interesting) {
+                val ref = "@e" + nodes.size
                 val kind = when {
                     n.isEditable -> "text-field"
                     n.isClickable -> "button"
                     else -> "text"
                 }
+                lastNodes[ref] = n
                 nodes.add(
                     mapOf(
-                        "ref" to "@e" + nodes.size,
+                        "ref" to ref,
                         "kind" to kind,
                         "text" to if (label.isEmpty()) null else label,
                         "id" to n.viewIdResourceName,
@@ -140,6 +151,111 @@ class A11yService : AccessibilityService() {
     /** Drops the diff baseline; call after switching apps or after a long gap. */
     fun resetBaseline() {
         lastSnapshot = null
+    }
+
+    /**
+     * Clicks the node a ref from the last dump points at. Works cross-app —
+     * the semantic tree is whatever window is focused, no Shizuku needed.
+     * Compose keeps the clickable flag on the container, so when the ref'd
+     * node itself is not clickable the walk climbs to its ancestors (3 levels)
+     * before giving up.
+     */
+    fun clickByRef(ref: String, longClick: Boolean = false): Map<String, Any?> {
+        val n = resolveNode(ref)
+            ?: return mapOf(
+                "error" to "ref 不存在或已失效（$ref），请重新 /a11y-dump 获取新 refs",
+                "knownRefs" to lastNodes.keys.toList().take(40),
+            )
+        val action = if (longClick) AccessibilityNodeInfo.ACTION_LONG_CLICK else AccessibilityNodeInfo.ACTION_CLICK
+        var target: AccessibilityNodeInfo? = n
+        var climbed = 0
+        while (target != null && climbed <= 3) {
+            target.refresh()
+            if (if (longClick) target.isLongClickable else target.isClickable) break
+            target = try {
+                target.parent
+            } catch (_: Exception) {
+                null
+            }
+            climbed++
+        }
+        val node = target
+            ?: return mapOf(
+                "error" to "$ref 不可点击，也无祖先节点可点击",
+                "bounds" to boundsOf(n),
+                "hint" to "改用 /tap 加 bounds 中心坐标",
+            )
+        val ok = node.performAction(action)
+        return mapOf(
+            "clicked" to ok,
+            "ref" to ref,
+            "long" to longClick,
+            "climbed" to climbed,
+            "bounds" to boundsOf(node),
+            "text" to node.text?.toString()?.take(120),
+        )
+    }
+
+    /**
+     * Writes text into an editable field by ref — the CJK-safe path into input
+     * boxes (Android's `input text` cannot inject non-ASCII, and injected
+     * Ctrl+V paste is unreliable across IMEs). The caller should verify with
+     * /a11y-text instead of trusting the return value.
+     */
+    fun setTextByRef(ref: String, text: String): Map<String, Any?> {
+        val n = resolveNode(ref)
+            ?: return mapOf(
+                "error" to "ref 不存在或已失效（$ref），请重新 /a11y-dump 获取新 refs",
+                "knownRefs" to lastNodes.keys.toList().take(40),
+            )
+        n.refresh()
+        if (!n.isEditable) {
+            return mapOf(
+                "error" to "$ref 不是可编辑字段（kind 非 text-field）",
+                "bounds" to boundsOf(n),
+                "text" to n.text?.toString()?.take(120),
+            )
+        }
+        val args = android.os.Bundle()
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        val ok = n.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        return mapOf(
+            "set" to ok,
+            "ref" to ref,
+            "length" to text.length,
+            "hint" to "用 /a11y-text?ref=$ref 读回字段实值确认，别信返回值",
+        )
+    }
+
+    /** Reads back a node's current text — the dump-field-reality check. */
+    fun textByRef(ref: String): Map<String, Any?> {
+        val n = resolveNode(ref)
+            ?: return mapOf(
+                "error" to "ref 不存在或已失效（$ref），请重新 /a11y-dump 获取新 refs",
+                "knownRefs" to lastNodes.keys.toList().take(40),
+            )
+        n.refresh()
+        val text = n.text?.toString()
+        val desc = n.contentDescription?.toString()
+        return mapOf(
+            "ref" to ref,
+            "text" to text,
+            "desc" to desc,
+            "editable" to n.isEditable,
+            "bounds" to boundsOf(n),
+        )
+    }
+
+    /** Normalizes "@e12" / "e12" / "@eN" spellings and returns the captured node. */
+    private fun resolveNode(ref: String): AccessibilityNodeInfo? {
+        val key = ref.trim().let { if (it.startsWith("@")) it else "@$it" }
+        return lastNodes[key]
+    }
+
+    private fun boundsOf(n: AccessibilityNodeInfo): String {
+        val b = Rect()
+        n.getBoundsInScreen(b)
+        return "[${b.left},${b.top}][${b.right},${b.bottom}]"
     }
 
     /** Nearest visible text under a node — Compose hides labels in child nodes. */
