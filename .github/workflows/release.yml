@@ -69,14 +69,19 @@ jobs:
       - name: Build official ZCode web UI + server
         run: bash scripts/fetch-zcode-web.sh
 
-      - name: Build debug APK (debug-signed, installable)
+      - name: Build release APK (release-signed when PA_KS_BASE64 is set; debug-signed fallback)
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - run: gradle :app:assembleDebug --no-daemon -Pandroid.suppressUnsupportedCompileSdk=35
+      - run: gradle :app:assembleRelease --no-daemon -Pandroid.suppressUnsupportedCompileSdk=35
 
       - name: Rename APK with tag
-        run: cp app/build/outputs/apk/debug/app-debug.apk "phone-agent-${GITHUB_REF_NAME}-arm64.apk"
+        run: cp app/build/outputs/apk/release/app-release.apk "phone-agent-${GITHUB_REF_NAME}-arm64.apk"
+
+      - name: Show APK signature
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "phone-agent-${GITHUB_REF_NAME}-arm64.apk" | head -4
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
