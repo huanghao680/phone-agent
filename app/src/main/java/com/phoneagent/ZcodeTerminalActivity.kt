@@ -38,19 +38,37 @@ class ZcodeTerminalActivity : ComponentActivity() {
         // constructor); without this the first onSizeChanged NPEs on mRenderer.
         val textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, resources.displayMetrics)
         terminalView.setTextSize(textSize.toInt())
-        title = when (SessionHolder.pendingAgent) {
+        SessionSwitcher.attach(this, findViewById(R.id.session_switcher))
+        ensureAgentSession()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // singleTask relaunch: the switcher (or the picker) asks for another
+        // agent while this activity is still on top — switch without losing it
+        intent?.getStringExtra("agent")?.let { SessionHolder.pendingAgent = it }
+        if (::terminalView.isInitialized) ensureAgentSession()
+    }
+
+    /**
+     * Attaches the pending agent's live session, or boots a fresh one. Shared
+     * by onCreate and onNewIntent so switching agents never tears the old
+     * session down — it keeps running in the background.
+     */
+    private fun ensureAgentSession() {
+        val agent = SessionHolder.pendingAgent
+        title = when (agent) {
             "dsh" -> "DeepSeek Harness TUI"
             else -> "Zcode TUI"
         }
-
-        val existing = SessionHolder.current()
-        val existingMatches = existing != null && existing.isRunning() &&
-            SessionHolder.pendingAgent == SessionHolder.currentAgent
-        if (existingMatches) {
+        val existing = SessionHolder.nodeSessions[agent]
+        if (existing != null && existing.isRunning()) {
             loading.visibility = View.GONE
             terminalView.visibility = View.VISIBLE
-            terminalView.requestFocus();
-        terminalView.attachSession(existing)
+            SessionHolder.currentAgent = agent
+            terminalView.requestFocus()
+            terminalView.attachSession(existing)
             ExtraKeys.attach(
                 findViewById(R.id.extra_keys),
                 findViewById(R.id.extra_keys_scroll),

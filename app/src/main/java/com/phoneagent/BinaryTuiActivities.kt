@@ -36,6 +36,7 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
         val textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, resources.displayMetrics)
         terminalView.setTextSize(textSize.toInt())
         title = agentName
+        SessionSwitcher.attach(this, findViewById(R.id.session_switcher))
 
         val existing = SessionHolder.binarySessions[agentName]
         if (existing != null && existing.isRunning()) {

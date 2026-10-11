@@ -18,6 +18,19 @@
             android:focusableInTouchMode="true"
             android:visibility="gone" />
 
+        <!-- Live-session switcher: lists every TUI session still running in the
+             background and jumps to it (per-agent concurrent sessions). -->
+        <TextView
+            android:id="@+id/session_switcher"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:background="#66000000"
+            android:padding="10dp"
+            android:text="⇄"
+            android:textColor="#E2E8F0"
+            android:textSize="18sp" />
+
         <LinearLayout
             android:id="@+id/loading"
             android:layout_width="wrap_content"
