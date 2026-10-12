@@ -53,19 +53,12 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- Termux-style extra keys row -->
-    <HorizontalScrollView
-        android:id="@+id/extra_keys_scroll"
+    <!-- Termux-style extra keys row — fills screen width, buttons distributed by weight -->
+    <LinearLayout
+        android:id="@+id/extra_keys"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="#161B22"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:id="@+id/extra_keys"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingVertical="4dp" />
-    </HorizontalScrollView>
+        android:orientation="vertical"
+        android:paddingVertical="4dp" />
 </LinearLayout>

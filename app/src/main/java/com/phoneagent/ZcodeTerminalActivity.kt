@@ -71,7 +71,6 @@ class ZcodeTerminalActivity : ComponentActivity() {
             terminalView.attachSession(existing)
             ExtraKeys.attach(
                 findViewById(R.id.extra_keys),
-                findViewById(R.id.extra_keys_scroll),
             ) { SessionHolder.current() }
         } else {
             thread(name = "runtime-extract") {
@@ -130,7 +129,6 @@ class ZcodeTerminalActivity : ComponentActivity() {
         terminalView.attachSession(session)
         ExtraKeys.attach(
             findViewById(R.id.extra_keys),
-            findViewById(R.id.extra_keys_scroll),
         ) { SessionHolder.current() }
         val svcIntent = Intent(this, SessionService::class.java).putExtra("agent", SessionHolder.pendingAgent)
         startForegroundService(svcIntent)

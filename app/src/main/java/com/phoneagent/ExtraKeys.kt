@@ -3,7 +3,6 @@ package com.phoneagent
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.termux.terminal.TerminalSession
@@ -74,13 +73,29 @@ object ExtraKeys {
      */
     fun attach(
         row: LinearLayout,
-        scroll: HorizontalScrollView,
         sessionProvider: () -> TerminalSession?,
     ) {
         val ctx = row.context
         val accent = 0xFF22D3EE.toInt()
         val normal = 0xFF161B22.toInt()
         val pressed = 0xFF2A3441.toInt()
+
+        // Adapt button size to screen width so the bar looks right on
+        // phones (~360dp), large phones / small tablets (~600dp), and
+        // tablets (~720dp+).
+        val dm = ctx.resources.displayMetrics
+        val swDp = dm.widthPixels / dm.density
+        val textSize = when {
+            swDp >= 720 -> 16f
+            swDp >= 600 -> 15f
+            else -> 13f
+        }
+        val btnHeightDp = when {
+            swDp >= 720 -> 56
+            swDp >= 600 -> 50
+            else -> 44
+        }
+        val btnHeightPx = (btnHeightDp * dm.density).toInt()
 
         fun write(data: ByteArray) {
             var bytes = data
@@ -97,11 +112,13 @@ object ExtraKeys {
             tv.typeface = Typeface.MONOSPACE
             tv.gravity = Gravity.CENTER
             tv.setSingleLine()
-            val pad = (10 * ctx.resources.displayMetrics.density).toInt()
+            tv.textSize = textSize
+            val pad = (10 * dm.density).toInt()
             tv.setPadding(pad, 6, pad, 6)
+            tv.minimumHeight = btnHeightPx
             val lp = LinearLayout.LayoutParams(
                 0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 key.weight,
             )
             tv.layoutParams = lp
@@ -127,7 +144,7 @@ object ExtraKeys {
             return tv
         }
 
-        // two stacked half-rows inside the scroll for compactness
+        // two stacked half-rows, each filling the full screen width
         val keys = row(latched)
         row.removeAllViews()
         row.orientation = LinearLayout.VERTICAL
@@ -135,9 +152,12 @@ object ExtraKeys {
         for (chunk in keys.chunked(half)) {
             val l = LinearLayout(ctx)
             l.orientation = LinearLayout.HORIZONTAL
+            l.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
             for (k in chunk) l.addView(makeButton(k))
             row.addView(l)
         }
-        scroll.post { scroll.fullScroll(View.FOCUS_LEFT) }
     }
 }

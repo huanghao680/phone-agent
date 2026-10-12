@@ -46,7 +46,6 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
         terminalView.attachSession(existing)
             ExtraKeys.attach(
                 findViewById(R.id.extra_keys),
-                findViewById(R.id.extra_keys_scroll),
             ) { session }
             session = existing
         } else {
@@ -87,7 +86,6 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
         terminalView.attachSession(s)
         ExtraKeys.attach(
             findViewById(R.id.extra_keys),
-            findViewById(R.id.extra_keys_scroll),
         ) { session }
         startForegroundService(
             Intent(this, SessionService::class.java).putExtra("agent", agentName)
