@@ -232,6 +232,13 @@ object AgentUpdate {
             // takes effect, even after an app restart.
             AgentSlots.beginBoot(ctx, AgentSlots.ZCODE) { onLine(it) }
             AgentSlots.markBootOk(ctx, AgentSlots.ZCODE)
+            // Kill any running zcode TUI session so the next open picks up the
+            // new version immediately. The running node process has the old
+            // module loaded in memory; without this the user sees the old
+            // version until they force-stop the app (the "restart several
+            // times" symptom).
+            SessionHolder.nodeSessions["zcode"]?.finishIfRunning()
+            SessionHolder.nodeSessions.remove("zcode")
         }
         onLine("[update] $pkg $version 更新完成 ✅")
         return true
@@ -338,6 +345,9 @@ object AgentUpdate {
         // version actually installed, or the update would keep showing
         // as available and re-downloading forever
         File(NodeRuntime.pkgDir(ctx), ".$agent-version").writeText(version)
+        // Kill any running TUI session so the next open picks up the new binary.
+        SessionHolder.binarySessions[agent]?.finishIfRunning()
+        SessionHolder.binarySessions.remove(agent)
         val note = if (agent == BinaryAgents.OPENCODE) "（重启 opencode webui 后生效）" else ""
         onLine("[update] $agent 更新完成 ✅ $version $note")
         return true
