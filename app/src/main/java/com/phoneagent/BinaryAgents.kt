@@ -128,6 +128,83 @@ object BinaryAgents {
         return isReady(ctx, agent)
     }
 
+    // ---- verify-then-swap update protection ----
+
+    /** The active binary path (or tree root) for [agent]. */
+    private fun activePath(ctx: Context, agent: String): File = when (agent) {
+        CODEX -> File(pkg(ctx), "vendor")
+        CLAUDE -> File(pkg(ctx), "claude")
+        OPENCODE -> File(pkg(ctx), "opencode")
+        else -> File(pkg(ctx), agent)
+    }
+
+    /** Backup suffix for the pre-update snapshot. */
+    private const val BAK = ".bak"
+
+    /**
+     * Renames the active binary/tree to `.bak` so a destructive extract can
+     * proceed without losing the known-good version. Returns true when a
+     * backup was made (or there was nothing to back up).
+     */
+    fun backup(ctx: Context, agent: String): Boolean = try {
+        val active = activePath(ctx, agent)
+        val bak = File(active.parentFile, active.name + BAK)
+        if (bak.exists()) bak.deleteRecursively()
+        if (active.exists()) active.renameTo(bak) else true
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
+     * Restores the `.bak` snapshot after a failed update. Deletes any partial
+     * extraction at the active path first, then renames `.bak` back.
+     */
+    fun restore(ctx: Context, agent: String): Boolean = try {
+        val active = activePath(ctx, agent)
+        val bak = File(active.parentFile, active.name + BAK)
+        if (active.exists()) active.deleteRecursively()
+        if (bak.exists()) bak.renameTo(active) else false
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
+     * Runs `binary --version` to verify the freshly extracted binary actually
+     * starts on this device. Catches segfaults, loader mismatches, and truncated
+     * extractions that isReady() alone would miss. 10 s timeout.
+     */
+    fun verify(ctx: Context, agent: String): Boolean {
+        val p = pkg(ctx)
+        val (cmd, extraEnv) = when (agent) {
+            CODEX -> listOf(
+                File(p, "vendor/aarch64-unknown-linux-musl/bin/codex").absolutePath,
+                "--version",
+            ) to mapOf("PATH" to (File(p, "vendor/aarch64-unknown-linux-musl/codex-path").absolutePath + ":/system/bin"))
+            CLAUDE -> listOf(
+                File(p, "ld-musl-aarch64.so.1").absolutePath,
+                File(p, "claude").absolutePath,
+                "--version",
+            ) to emptyMap()
+            OPENCODE -> listOf(
+                File(p, "ld-musl-aarch64.so.1").absolutePath,
+                File(p, "opencode").absolutePath,
+                "--version",
+            ) to mapOf("LD_LIBRARY_PATH" to p.absolutePath)
+            else -> return false
+        }
+        return try {
+            val pb = ProcessBuilder(cmd)
+            pb.environment().putAll(NodeRuntime.environment(ctx))
+            pb.environment().putAll(extraEnv)
+            pb.redirectErrorStream(true)
+            val proc = pb.start()
+            proc.inputStream.readBytes() // drain so the process doesn't block on pipe buffer
+            proc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS) && proc.exitValue() == 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /** Latest version from the npm registry, resolving each agent's platform package. */
     fun latestVersion(ctx: Context, agent: String): String? = try {
         // codex's platform binaries are aliased versions of the main package

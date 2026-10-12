@@ -88,6 +88,10 @@ class ZcodeTerminalActivity : ComponentActivity() {
                 AgentSlots.migrateLegacy(this, AgentSlots.DSH)
                 AgentSlots.reconcile(this, AgentSlots.ZCODE) { }
                 AgentSlots.reconcile(this, AgentSlots.DSH) { }
+                // zcode has no service boot to call beginBoot — activate any
+                // pending update immediately so the TUI runs the new version.
+                AgentSlots.beginBoot(this, AgentSlots.ZCODE) { }
+                AgentSlots.markBootOk(this, AgentSlots.ZCODE)
                 // Android 11+ blocks link(); seed config via rename so the CLI
                 // never has to create it with a hard link
                 ZcodeConfig.seed(this)

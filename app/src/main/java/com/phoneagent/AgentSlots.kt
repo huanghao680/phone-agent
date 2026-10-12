@@ -152,7 +152,13 @@ object AgentSlots {
         }
         val target = if (s.active == "a") "b" else "a"
         val prefix = slotPrefix(ctx, pkg, target)
-        prefix.deleteRecursively() // a previous pending/standby tree is replaced
+        if (prefix.exists() && !prefix.deleteRecursively()) {
+            // the standby slot is owned by another uid (e.g. a root shell
+            // experiment) and cannot be cleaned — fail clearly instead of
+            // silently proceeding to a failed npm install.
+            onLine("[update] 备用槽 $target 无法清理（目录属主非本应用），请用 root 删除 ${prefix.absolutePath}")
+            return null
+        }
         File(prefix, "lib").mkdirs()
         val args = mutableListOf(node.absolutePath, npm.absolutePath, "install", "-g", "--prefix", prefix.absolutePath)
         if (ignoreScripts) args.add("--ignore-scripts")

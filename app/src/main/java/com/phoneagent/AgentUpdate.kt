@@ -224,6 +224,15 @@ object AgentUpdate {
             sharpWasm(ctx, node, npm, NodeRuntime.usrDir(ctx), onLine, dshRoot)
             runAndroidPatches(ctx, onLine, dshRoot)
         }
+        if (pkg == "zcode-app-cli") {
+            // zcode is a CLI with no boot to verify against — activate the
+            // standby slot immediately so the new version is live right away.
+            // Without this the slot stays pending-activate forever (beginBoot
+            // is only wired into DshService for dsh) and the update never
+            // takes effect, even after an app restart.
+            AgentSlots.beginBoot(ctx, AgentSlots.ZCODE) { onLine(it) }
+            AgentSlots.markBootOk(ctx, AgentSlots.ZCODE)
+        }
         onLine("[update] $pkg $version 更新完成 ✅")
         return true
     }
@@ -306,17 +315,31 @@ object AgentUpdate {
         if (!download(ctx, tarball, out) { onLine("[update] 下载失败：$it") }) return false
         onLine("[update] 下载完成：${"%.1f".format(out.length() / 1048576.0)}MB")
         File(NodeRuntime.pkgDir(ctx), ".$agent-version").delete()
+        // Back up the known-good binary before the destructive extract so a
+        // broken update (corrupt tarball, segfault, loader mismatch) can be
+        // rolled back instead of leaving the agent dead.
+        val backedUp = BinaryAgents.backup(ctx, agent)
         // force: the previous tree is still present, so a plain ensure() would
         // short-circuit on isReady() and keep the old binary
         val ok = BinaryAgents.ensure(ctx, agent, force = true) { line -> onLine(line) }
-        if (ok) {
-            // ensure records the BUNDLED version as the marker; record the
-            // version actually installed, or the update would keep showing
-            // as available and re-downloading forever
-            File(NodeRuntime.pkgDir(ctx), ".$agent-version").writeText(version)
-            val note = if (agent == BinaryAgents.OPENCODE) "（重启 opencode webui 后生效）" else ""
-            onLine("[update] $agent 更新完成 ✅ $version $note")
+        if (!ok) {
+            if (backedUp && BinaryAgents.restore(ctx, agent))
+                onLine("[update] 解压失败，已恢复旧版本")
+            return false
         }
-        return ok
+        // Verify the new binary actually starts on this device before committing.
+        onLine("[update] 验证新版本...")
+        if (!BinaryAgents.verify(ctx, agent)) {
+            onLine("[update] 新版本验证不通过（无法启动），已恢复旧版本")
+            if (backedUp) BinaryAgents.restore(ctx, agent)
+            return false
+        }
+        // ensure records the BUNDLED version as the marker; record the
+        // version actually installed, or the update would keep showing
+        // as available and re-downloading forever
+        File(NodeRuntime.pkgDir(ctx), ".$agent-version").writeText(version)
+        val note = if (agent == BinaryAgents.OPENCODE) "（重启 opencode webui 后生效）" else ""
+        onLine("[update] $agent 更新完成 ✅ $version $note")
+        return true
     }
 }
