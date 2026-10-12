@@ -15,7 +15,7 @@
  */
 const http = require("http");
 
-const BACKEND = process.env.WORKBUDDY_BASE || "http://192.168.1.197:7863";
+const BACKEND = process.env.WORKBUDDY_BASE || "";
 const KEY = process.env.WORKBUDDY_API_KEY || "";
 const PORT = parseInt(process.env.WORKBUDDY_BRIDGE_PORT || "7864", 10);
 

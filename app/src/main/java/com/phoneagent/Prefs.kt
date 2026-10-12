@@ -20,7 +20,7 @@ object Prefs {
         sp(ctx).edit().putString("npm_registry", v.trim()).apply()
     }
 
-    /** HTTP proxy for all Node network traffic, e.g. http://192.168.1.197:7890. Empty = direct. */
+    /** HTTP proxy for all Node network traffic, e.g. http://192.168.1.100:7890. Empty = direct. */
     fun httpProxy(ctx: Context): String = sp(ctx).getString("http_proxy", "")?.trim() ?: ""
 
     fun setHttpProxy(ctx: Context, v: String) {
@@ -63,7 +63,7 @@ object Prefs {
     }
 
     /**
-     * Gateway base URL, e.g. http://192.168.1.197:3002 — the port varies by
+     * Gateway base URL, e.g. http://192.168.1.100:3002 — the port varies by
      * deployment (an older build served chat-completions only on another port),
      * so this is a field rather than a constant.
      */

@@ -26,3 +26,6 @@ release.keystore
 release-key.pass
 # also the base64 dump used to seed the CI secret (never keep it on disk)
 release.keystore.b64
+# local-only handover doc and NAS backup script (contain private env info)
+HANDOVER.md
+scripts/backup-nas.ps1

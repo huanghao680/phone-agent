@@ -102,7 +102,7 @@ class SettingsActivity : ComponentActivity() {
                                     proxy = it
                                     Prefs.setHttpProxy(this@SettingsActivity, it.text)
                                 },
-                                label = "http://192.168.1.197:7890",
+                                label = "http://192.168.1.100:7890",
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -311,11 +311,11 @@ class SettingsActivity : ComponentActivity() {
 
                             if (enabled) {
                                 Spacer(Modifier.height(10.dp))
-                                FieldLabel("网关 Base URL（如 http://192.168.1.197:3002）")
+                                FieldLabel("网关 Base URL（如 http://192.168.1.100:3002）")
                                 TextField(
                                     value = androidx.compose.ui.text.input.TextFieldValue(base),
                                     onValueChange = { base = it.text },
-                                    label = "http://192.168.1.197:3002",
+                                    label = "http://192.168.1.100:3002",
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
