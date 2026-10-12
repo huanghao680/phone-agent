@@ -16,6 +16,15 @@ import com.termux.terminal.TerminalEmulator
  */
 object ExtraKeys {
 
+    /** Latched modifier state, shared with the TerminalView so that
+     *  readControlKey()/readAltKey() can report it to the terminal emulator.
+     *  Sticky (Termux-style): CTRL stays on until tapped again, so the user
+     *  can type Ctrl+P, Ctrl+C, … in sequence without re-latching each time. */
+    @Volatile var latched = mutableMapOf("ctrl" to false, "alt" to false, "fn" to false)
+
+    fun isCtrlLatched(): Boolean = latched["ctrl"] == true
+    fun isAltLatched(): Boolean = latched["alt"] == true
+
     private class Key(
         val label: String,
         val bytes: (() -> ByteArray)? = null,
@@ -69,7 +78,6 @@ object ExtraKeys {
         sessionProvider: () -> TerminalSession?,
     ) {
         val ctx = row.context
-        val latched = mutableMapOf("ctrl" to false, "alt" to false, "fn" to false)
         val accent = 0xFF22D3EE.toInt()
         val normal = 0xFF161B22.toInt()
         val pressed = 0xFF2A3441.toInt()
@@ -81,8 +89,6 @@ object ExtraKeys {
             }
             if (latched["alt"] == true) bytes = ESC + bytes
             sessionProvider()?.write(bytes, 0, bytes.size)
-            latched["ctrl"] = false
-            latched["alt"] = false
         }
 
         fun makeButton(key: Key): View {
@@ -106,8 +112,9 @@ object ExtraKeys {
                     tv.setBackgroundColor(if (on) accent else normal)
                     tv.setTextColor(if (on) 0xFF0B1220.toInt() else 0xFFE2E8F0.toInt())
                 }
-                tv.setBackgroundColor(normal)
-                tv.setTextColor(0xFFE2E8F0.toInt())
+                val on = latched[key.modifier] == true
+                tv.setBackgroundColor(if (on) accent else normal)
+                tv.setTextColor(if (on) 0xFF0B1220.toInt() else 0xFFE2E8F0.toInt())
             } else {
                 tv.setOnClickListener {
                     tv.setBackgroundColor(pressed)

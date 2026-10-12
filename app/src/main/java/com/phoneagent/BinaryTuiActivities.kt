@@ -146,8 +146,8 @@ abstract class BaseBinaryTuiActivity : ComponentActivity() {
         override fun onKeyDown(keyCode: Int, e: KeyEvent?, session: TerminalSession?): Boolean = false
         override fun onKeyUp(keyCode: Int, e: KeyEvent?): Boolean = false
         override fun onLongPress(event: MotionEvent?): Boolean = false
-        override fun readControlKey(): Boolean = false
-        override fun readAltKey(): Boolean = false
+        override fun readControlKey(): Boolean = ExtraKeys.isCtrlLatched()
+        override fun readAltKey(): Boolean = ExtraKeys.isAltLatched()
         override fun readShiftKey(): Boolean = false
         override fun readFnKey(): Boolean = false
         override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean = false

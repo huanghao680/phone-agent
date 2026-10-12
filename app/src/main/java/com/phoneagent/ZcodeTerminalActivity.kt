@@ -221,8 +221,8 @@ class ZcodeTerminalActivity : ComponentActivity() {
 
         override fun onLongPress(event: MotionEvent?): Boolean = false
 
-        override fun readControlKey(): Boolean = false
-        override fun readAltKey(): Boolean = false
+        override fun readControlKey(): Boolean = ExtraKeys.isCtrlLatched()
+        override fun readAltKey(): Boolean = ExtraKeys.isAltLatched()
         override fun readShiftKey(): Boolean = false
         override fun readFnKey(): Boolean = false
 
